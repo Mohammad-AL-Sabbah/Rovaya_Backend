@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36511.14 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rovaya.PL", "WebApplication1\Rovaya.PL.csproj", "{FBC3F49C-5EC6-4837-BBB3-E387E0389484}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rovaya.BLL", "BLL\Rovaya.BLL.csproj", "{DB816848-66BE-4B44-9079-34B01AEBC974}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rovaya.DAL", "DAL\Rovaya.DAL.csproj", "{D829BA4B-C179-4445-B7A9-A9F83418EC0F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FBC3F49C-5EC6-4837-BBB3-E387E0389484}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBC3F49C-5EC6-4837-BBB3-E387E0389484}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBC3F49C-5EC6-4837-BBB3-E387E0389484}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBC3F49C-5EC6-4837-BBB3-E387E0389484}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB816848-66BE-4B44-9079-34B01AEBC974}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB816848-66BE-4B44-9079-34B01AEBC974}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB816848-66BE-4B44-9079-34B01AEBC974}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB816848-66BE-4B44-9079-34B01AEBC974}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D829BA4B-C179-4445-B7A9-A9F83418EC0F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D829BA4B-C179-4445-B7A9-A9F83418EC0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D829BA4B-C179-4445-B7A9-A9F83418EC0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D829BA4B-C179-4445-B7A9-A9F83418EC0F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CE9BDD61-8747-45E8-A889-8AD93095454B}
+	EndGlobalSection
+EndGlobal
