@@ -2,15 +2,15 @@
 using Rovaya.BLL.Service.TourismGuide;
 using Rovaya.DAL.DTO.Request.TourismGuid;
 
-namespace Rovaya.PL.Controllers
+namespace Rovaya.PL.Controllers.Areas.Customer
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class CitizenController : ControllerBase
+    public class CustomerController : ControllerBase
     {
         private readonly ITourismGuidService _tourismService;
 
-        public CitizenController(ITourismGuidService tourismService)
+        public CustomerController(ITourismGuidService tourismService)
         {
             _tourismService = tourismService;
         }
