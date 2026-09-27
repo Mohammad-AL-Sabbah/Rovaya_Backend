@@ -1,13 +1,14 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Rovaya.BLL.Service.TourismGuide;
+using Rovaya.DAL.DTO.Request.Auth;
 using Rovaya.DAL.DTO.Request.TourismGuid;
 
 namespace Rovaya.PL.Controllers.Areas.Admin
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // يضمن أن فقط المستخدمين المصرح لهم يمكنهم الوصول
+    [Authorize ] // يضمن أن فقط المستخدمين المصرح لهم يمكنهم الوصول
     public class AdminController : ControllerBase
     {
         private readonly ITourismGuidService _tourismService;
@@ -390,5 +391,11 @@ namespace Rovaya.PL.Controllers.Areas.Admin
                 return HandleException(ex, "فشل في جلب تفاصيل قسم المدينة");
             }
         }
+
+
+     
+
+
+
     }
 }

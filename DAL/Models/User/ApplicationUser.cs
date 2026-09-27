@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Rovaya.DAL.Enums;
 using Rovaya.DAL.Models.Identity;
 using System;
 using System.Collections.Generic;
@@ -26,5 +27,22 @@ namespace Rovaya.DAL.Models.Auth
 
         // الملف الطبي
         public UserMedicalProfile? MedicalProfile { get; set; }
+
+        public string? CodeResetPassword { get; set; }
+        public DateTime? CodeResetPasswordExpiration { get; set; }
+
+        // لتتبع وقت آخر إرسال لرسالة التفعيل للايميل لمنع الإرسال المتكرر
+
+        public DateTime? LastConfirmationEmailSentAt { get; set; }
+
+
+        public AccountStatus Status { get; set; } = AccountStatus.Active;
+
+        public string? BlockReason { get; set; }
+
+        public DateTime? BlockExpirationDate { get; set; }
+
+
+
     }
 }

@@ -6,12 +6,9 @@ using System.Threading.Tasks;
 
 namespace Rovaya.DAL.DTO.Response.Auth
 {
-    public class LoginResponse
+    public class LoginResponse : BaseResponse
     {
-        public List<string>? Errors {  get; set; }
-        public string Message { get; set; }
-
-        public bool Success { get; set; }
+       
         public string? UserId { get; set; }
         public string? Email { get; set; }
         public string? FirstName { get; set; }
