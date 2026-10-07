@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Rovaya.BLL.Service.Audit; // تمت إضافته للـ Audit
 using Rovaya.DAL.DTO.Request.Auth;
 using Rovaya.DAL.DTO.Response.Auth;
 using Rovaya.DAL.Enums;
@@ -15,7 +16,6 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using Rovaya.DAL.Enums;
 
 namespace Rovaya.BLL.Service.Auth
 {
@@ -25,17 +25,20 @@ namespace Rovaya.BLL.Service.Auth
         private readonly IConfiguration _configuration;
         private readonly IEmailSender _emailSender;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly IAuditLogService _auditLogService; // تمت إضافته
 
         public AuthenticationService(
             UserManager<ApplicationUser> userManager,
             IConfiguration configuration,
             IEmailSender emailSender,
-            SignInManager<ApplicationUser> signInManager)
+            SignInManager<ApplicationUser> signInManager,
+            IAuditLogService auditLogService) // تمت إضافته
         {
             _userManager = userManager;
             _configuration = configuration;
             _emailSender = emailSender;
             _signInManager = signInManager;
+            _auditLogService = auditLogService; // تمت إضافته
         }
 
         public async Task<RegisterResponse> RegisterAsync(RegisterRequest registerRequest)
@@ -58,7 +61,7 @@ namespace Rovaya.BLL.Service.Auth
                     Country = registerRequest.Country,
                     EmailConfirmed = false,
                     CreatedAt = DateTime.UtcNow,
-                    LastConfirmationEmailSentAt = DateTime.UtcNow // تسجيل وقت الإنشاء كبداية
+                    LastConfirmationEmailSentAt = DateTime.UtcNow
                 };
 
                 var result = await _userManager.CreateAsync(user, registerRequest.Password);
@@ -101,149 +104,112 @@ namespace Rovaya.BLL.Service.Auth
             catch { return false; }
         }
 
-
-
-public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
-    {
-        try
+        public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
-            var user = await _userManager.FindByEmailAsync(loginRequest.Email);
-            if (user is null)
+            try
             {
-                return new LoginResponse
+                var user = await _userManager.FindByEmailAsync(loginRequest.Email);
+                if (user is null)
                 {
-                    Success = false,
-                    Message = "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-                };
-            }
-
-            // 1. التحقق من كلمة المرور مباشرة
-            var passwordValid = await _userManager.CheckPasswordAsync(user, loginRequest.Password);
-            if (!passwordValid)
-            {
-                return new LoginResponse
-                {
-                    Success = false,
-                    Message = "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-                };
-            }
-
-            // 2. التحقق من تفعيل الحساب وإعادة الإرسال الذكي
-            if (!user.EmailConfirmed)
-            {
-                bool canResend = user.LastConfirmationEmailSentAt == null ||
-                                 (DateTime.UtcNow - user.LastConfirmationEmailSentAt.Value).TotalSeconds >= 50;
-
-                if (canResend)
-                {
-                    user.LastConfirmationEmailSentAt = DateTime.UtcNow;
-                    await _userManager.UpdateAsync(user);
-                    await SendConfirmationEmailInternalAsync(user);
-
-                    var roles = await _userManager.GetRolesAsync(user);
-                    bool isAdmin = roles.Contains("Admin");
-
-                    string message = isAdmin
-                        ? "حسابك غير مفعل بعد. تم إعادة إرسال رابط التفعيل. يرجى أيضاً تغيير كلمة المرور المبدئية فور التفعيل."
-                        : "حسابك غير مفعل بعد. تم إعادة إرسال رابط التفعيل إلى بريدك الإلكتروني تلقائياً.";
-
-                    return new LoginResponse { Success = false, Message = message };
+                    return new LoginResponse { Success = false, Message = "البريد الإلكتروني أو كلمة المرور غير صحيحة" };
                 }
-                else
-                {
-                    int waitSeconds = 50 - (int)(DateTime.UtcNow - user.LastConfirmationEmailSentAt.Value).TotalSeconds;
-                    return new LoginResponse
-                    {
-                        Success = false,
-                        Message = $"حسابك غير مفعل بعد. يرجى الانتظار {waitSeconds} ثانية قبل محاولة تسجيل الدخول مرة أخرى."
-                    };
-                }
-            }
 
-            // 3. 🔒 التحقق من حالة الحظر (Block Status Check)
-            if (user.Status == AccountStatus.PermanentlyBlocked)
-            {
-                return new LoginResponse
+                var passwordValid = await _userManager.CheckPasswordAsync(user, loginRequest.Password);
+                if (!passwordValid)
                 {
-                    Success = false,
-                    Message = $"حسابك محظور بشكل دائم. السبب: {user.BlockReason}. يرجى التواصل مع الإدارة."
-                };
-            }
-            else if (user.Status == AccountStatus.TemporarilyBlocked)
-            {
-                if (user.BlockExpirationDate.HasValue && user.BlockExpirationDate.Value <= DateTime.UtcNow)
-                {
-                    // ✅ فك الحظر تلقائياً لانتهاء المدة
-                    user.Status = AccountStatus.Active;
-                    user.BlockReason = null;
-                    user.BlockExpirationDate = null;
-                    await _userManager.UpdateAsync(user);
+                    return new LoginResponse { Success = false, Message = "البريد الإلكتروني أو كلمة المرور غير صحيحة" };
                 }
-                else
-                {
-                    // ❌ الحظر لا يزال سارياً (مع تنسيق ذكي للوقت)
-                    var remainingTime = user.BlockExpirationDate.Value - DateTime.UtcNow;
 
-                    string remainingTimeMessage;
-                    if (remainingTime.TotalMinutes < 1)
+                if (!user.EmailConfirmed)
+                {
+                    bool canResend = user.LastConfirmationEmailSentAt == null ||
+                                     (DateTime.UtcNow - user.LastConfirmationEmailSentAt.Value).TotalSeconds >= 50;
+
+                    if (canResend)
                     {
-                        remainingTimeMessage = "أقل من دقيقة";
-                    }
-                    else if (remainingTime.TotalHours < 1)
-                    {
-                        remainingTimeMessage = $"{Math.Ceiling(remainingTime.TotalMinutes)} دقيقة";
-                    }
-                    else if (remainingTime.TotalDays < 1)
-                    {
-                        remainingTimeMessage = $"{Math.Ceiling(remainingTime.TotalHours)} ساعة";
+                        user.LastConfirmationEmailSentAt = DateTime.UtcNow;
+                        await _userManager.UpdateAsync(user);
+                        await SendConfirmationEmailInternalAsync(user);
+
+                        var roles = await _userManager.GetRolesAsync(user);
+                        bool isAdmin = roles.Contains("Admin");
+
+                        string message = isAdmin
+                            ? "حسابك غير مفعل بعد. تم إعادة إرسال رابط التفعيل. يرجى أيضاً تغيير كلمة المرور المبدئية فور التفعيل."
+                            : "حسابك غير مفعل بعد. تم إعادة إرسال رابط التفعيل إلى بريدك الإلكتروني تلقائياً.";
+
+                        return new LoginResponse { Success = false, Message = message };
                     }
                     else
                     {
-                        remainingTimeMessage = $"{remainingTime.Days} يوم و {remainingTime.Hours} ساعة";
+                        int waitSeconds = 50 - (int)(DateTime.UtcNow - user.LastConfirmationEmailSentAt.Value).TotalSeconds;
+                        return new LoginResponse
+                        {
+                            Success = false,
+                            Message = $"حسابك غير مفعل بعد. يرجى الانتظار {waitSeconds} ثانية قبل محاولة تسجيل الدخول مرة أخرى."
+                        };
                     }
+                }
 
+                if (user.Status == AccountStatus.PermanentlyBlocked)
+                {
                     return new LoginResponse
                     {
                         Success = false,
-                        Message = $"حسابك محظور مؤقتاً. السبب: {user.BlockReason}. المدة المتبقية: {remainingTimeMessage}."
+                        Message = $"حسابك محظور بشكل دائم. السبب: {user.BlockReason}. يرجى التواصل مع الإدارة."
                     };
                 }
-            }
+                else if (user.Status == AccountStatus.TemporarilyBlocked)
+                {
+                    if (user.BlockExpirationDate.HasValue && user.BlockExpirationDate.Value <= DateTime.UtcNow)
+                    {
+                        user.Status = AccountStatus.Active;
+                        user.BlockReason = null;
+                        user.BlockExpirationDate = null;
+                        await _userManager.UpdateAsync(user);
+                    }
+                    else
+                    {
+                        var remainingTime = user.BlockExpirationDate.Value - DateTime.UtcNow;
+                        string remainingTimeMessage;
+                        if (remainingTime.TotalMinutes < 1) remainingTimeMessage = "أقل من دقيقة";
+                        else if (remainingTime.TotalHours < 1) remainingTimeMessage = $"{Math.Ceiling(remainingTime.TotalMinutes)} دقيقة";
+                        else if (remainingTime.TotalDays < 1) remainingTimeMessage = $"{Math.Ceiling(remainingTime.TotalHours)} ساعة";
+                        else remainingTimeMessage = $"{remainingTime.Days} يوم و {remainingTime.Hours} ساعة";
 
-            // 4. التحقق من Lockout (محاولات الدخول الخاطئة المتكررة)
-            if (await _userManager.IsLockedOutAsync(user))
-            {
+                        return new LoginResponse
+                        {
+                            Success = false,
+                            Message = $"حسابك محظور مؤقتاً. السبب: {user.BlockReason}. المدة المتبقية: {remainingTimeMessage}."
+                        };
+                    }
+                }
+
+                if (await _userManager.IsLockedOutAsync(user))
+                {
+                    return new LoginResponse { Success = false, Message = "الحساب معطل مؤقتاً بسبب محاولات دخول خاطئة متكررة." };
+                }
+
+                var userRoles = await _userManager.GetRolesAsync(user);
+
                 return new LoginResponse
                 {
-                    Success = false,
-                    Message = "الحساب معطل مؤقتاً بسبب محاولات دخول خاطئة متكررة."
+                    Success = true,
+                    Message = "تم تسجيل الدخول بنجاح",
+                    UserId = user.Id,
+                    Email = user.Email,
+                    FirstName = user.FirstName,
+                    AccessToken = await GenerateAccessToken(user),
+                    Roles = userRoles.ToList()
                 };
             }
-
-            // 5. نجاح تسجيل الدخول وتوليد الـ Token
-            var userRoles = await _userManager.GetRolesAsync(user);
-
-            return new LoginResponse
+            catch (Exception ex)
             {
-                Success = true,
-                Message = "تم تسجيل الدخول بنجاح",
-                UserId = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                AccessToken = await GenerateAccessToken(user),
-                Roles = userRoles.ToList()
-            };
+                return new LoginResponse { Success = false, Message = $"حدث خطأ غير متوقع أثناء تسجيل الدخول: {ex.Message}" };
+            }
         }
-        catch (Exception ex)
-        {
-            return new LoginResponse
-            {
-                Success = false,
-                Message = $"حدث خطأ غير متوقع أثناء تسجيل الدخول: {ex.Message}"
-            };
-        }
-    }
-    public async Task<BaseResponse> ResendConfirmationEmailAsync(string email)
+
+        public async Task<BaseResponse> ResendConfirmationEmailAsync(string email)
         {
             try
             {
@@ -290,7 +256,6 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
             var user = await _userManager.FindByEmailAsync(request.Email);
             if (user is null)
             {
-                // حماية الخصوصية: لا نكشف إذا كان الإيميل موجوداً أم لا
                 return new ForgetPasswordResponse { Success = true, Message = "إذا كان هذا البريد مسجلاً لدينا، فقد تم إرسال كود إعادة التعيين." };
             }
 
@@ -310,20 +275,9 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         public async Task<ResetPasswordResponse> ResetPassword(ResetPasswordRequest request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
-            if (user is null)
-            {
-                return new ResetPasswordResponse { Success = false, Message = "البريد الإلكتروني غير مسجل." };
-            }
-
-            if (user.CodeResetPassword != request.Code)
-            {
-                return new ResetPasswordResponse { Success = false, Message = "كود إعادة التعيين غير صحيح." };
-            }
-
-            if (user.CodeResetPasswordExpiration < DateTime.UtcNow)
-            {
-                return new ResetPasswordResponse { Success = false, Message = "انتهت صلاحية كود إعادة التعيين. يرجى طلب كود جديد." };
-            }
+            if (user is null) return new ResetPasswordResponse { Success = false, Message = "البريد الإلكتروني غير مسجل." };
+            if (user.CodeResetPassword != request.Code) return new ResetPasswordResponse { Success = false, Message = "كود إعادة التعيين غير صحيح." };
+            if (user.CodeResetPasswordExpiration < DateTime.UtcNow) return new ResetPasswordResponse { Success = false, Message = "انتهت صلاحية كود إعادة التعيين. يرجى طلب كود جديد." };
 
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
@@ -338,7 +292,6 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                 };
             }
 
-            // مسح الكود بعد الاستخدام الناجح
             user.CodeResetPassword = null;
             user.CodeResetPasswordExpiration = null;
             await _userManager.UpdateAsync(user);
@@ -373,14 +326,14 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: userClaims,
-                expires: DateTime.UtcNow.AddMinutes(30),
+                expires: DateTime.UtcNow.AddDays(30),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // ================== Email Templates ==================
+        // ================== Email Templates (كاملة بدون اختصار) ==================
 
         private string BuildConfirmationEmailTemplate(string firstName, string confirmationLink)
         {
@@ -453,6 +406,7 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                 </div>
             </body></html>";
         }
+
         private string BuildPasswordChangedEmailTemplate(string firstName)
         {
             return $@"
@@ -489,97 +443,145 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
             </body></html>";
         }
 
+        private string BuildAccountDeletionEmailTemplate(string firstName)
+        {
+            return $@"
+            <!DOCTYPE html><html><head><meta charset='UTF-8'><style>
+                body {{ font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f4f6f4; margin: 0; padding: 0; }}
+                .email-container {{ max-width: 600px; margin: 30px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(18, 62, 52, 0.08); }}
+                .header {{ background-color: #123E34; padding: 35px 20px; text-align: center; }}
+                .brand-name {{ color: #ffffff; font-size: 32px; font-weight: 800; margin: 0; }}
+                .section {{ padding: 30px; text-align: center; }}
+                .rtl {{ direction: rtl; }}
+                .ltr {{ direction: ltr; }}
+                .title {{ font-size: 20px; font-weight: 700; color: #123E34; margin-bottom: 12px; }}
+                .text {{ font-size: 14px; line-height: 1.7; color: #555555; margin-bottom: 15px; }}
+                .warning-icon {{ font-size: 48px; margin-bottom: 10px; }}
+                .footer {{ background-color: #F9FAF7; padding: 20px; text-align: center; font-size: 12px; color: #888888; }}
+            </style></head><body>
+                <div class='email-container'>
+                    <div class='header'><h1 class='brand-name'>ROVAYA</h1></div>
+                    <div class='section rtl'>
+                        <div class='warning-icon'>👋</div>
+                        <div class='title'>وداعاً، {firstName}</div>
+                        <p class='text'>نود إعلامك بأنه تم حذف حسابك في منصة Rovaya بنجاح.</p>
+                        <p class='text'>تم حذف جميع بياناتك الشخصية، بما في ذلك الملف الطبي وأرقام الطوارئ، بشكل نهائي من قواعد بياناتنا.</p>
+                        <p class='text' style='color: #2ECC71; font-weight: 600;'>نتمنى لك رحلات سعيدة ومغامرات رائعة في فلسطين! 🇵🇸</p>
+                    </div>
+                    <div style='border-top: 1px solid #edf2f7; margin: 0 30px;'></div>
+                    <div class='section ltr'>
+                        <div class='warning-icon'>👋</div>
+                        <div class='title'>Goodbye, {firstName}</div>
+                        <p class='text'>We would like to inform you that your Rovaya account has been successfully deleted.</p>
+                        <p class='text'>All your personal data, including your medical profile and emergency numbers, has been permanently removed from our databases.</p>
+                        <p class='text' style='color: #2ECC71; font-weight: 600;'>We wish you happy journeys and wonderful adventures in Palestine! 🇵🇸</p>
+                    </div>
+                    <div class='footer'>&copy; {DateTime.UtcNow.Year} Rovaya. All rights reserved.</div>
+                </div>
+            </body></html>";
+        }
+
+        private string BuildEmployeeConfirmationEmailTemplate(string firstName, string confirmationLink, string temporaryPassword)
+        {
+            return $@"
+            <!DOCTYPE html><html><head><meta charset='UTF-8'><style>
+                body {{ font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f4f6f4; margin: 0; padding: 0; }}
+                .email-container {{ max-width: 600px; margin: 30px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(18, 62, 52, 0.08); }}
+                .header {{ background-color: #123E34; padding: 35px 20px; text-align: center; }}
+                .brand-name {{ color: #ffffff; font-size: 32px; font-weight: 800; margin: 0; }}
+                .brand-tagline {{ color: #2ECC71; font-size: 13px; margin-top: 6px; }}
+                .section {{ padding: 30px; }}
+                .rtl {{ direction: rtl; text-align: right; }}
+                .ltr {{ direction: ltr; text-align: left; }}
+                .title {{ font-size: 20px; font-weight: 700; color: #123E34; margin-bottom: 12px; }}
+                .text {{ font-size: 14px; line-height: 1.7; color: #555555; margin-bottom: 15px; }}
+                .btn {{ background-color: #123E34; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block; border: 2px solid #2ECC71; }}
+                .password-box {{ background-color: #f0fdf4; border: 2px dashed #2ECC71; color: #123E34; font-size: 18px; font-weight: 700; padding: 12px 20px; border-radius: 8px; display: inline-block; margin: 10px 0; letter-spacing: 2px; }}
+                .warning {{ background-color: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 15px; border-left: 4px solid #ffc107; }}
+                .footer {{ background-color: #F9FAF7; padding: 20px; text-align: center; font-size: 12px; color: #888888; }}
+            </style></head><body>
+                <div class='email-container'>
+                    <div class='header'><h1 class='brand-name'>ROVAYA</h1><div class='brand-tagline'>اكتشف فلسطين ... بطريقتك</div></div>
+                    <div class='section rtl'>
+                        <div class='title'>أهلاً بك في فريق Rovaya، {firstName}! 🎉</div>
+                        <p class='text'>تم إنشاء حسابك كمدير في منصة Rovaya بنجاح. يرجى اتباع الخطوات التالية:</p>
+                        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;'>
+                            <p style='margin: 5px 0; font-weight: 600; color: #123E34;'>1️⃣ كلمة المرور المبدئية:</p>
+                            <div class='password-box'>{temporaryPassword}</div>
+                        </div>
+                        <p style='margin: 15px 0; font-weight: 600; color: #123E34;'>2️⃣ تأكيد بريدك الإلكتروني:</p>
+                        <div style='text-align: center; margin: 15px 0;'>
+                            <a href='{confirmationLink}' class='btn'>تأكيد البريد الإلكتروني</a>
+                        </div>
+                        <div class='warning'>
+                            <strong>⚠️ مهم جداً:</strong><br>
+                            • يرجى تغيير كلمة المرور المبدئية فور تسجيل الدخول لأول مرة<br>
+                            • هذا الرابط صالح لمدة 24 ساعة فقط<br>
+                            • إذا لم تقم بتأكيد الحساب خلال هذه المدة، يرجى التواصل مع المدير
+                        </div>
+                    </div>
+                    <div style='border-top: 1px solid #edf2f7; margin: 0 30px;'></div>
+                    <div class='section ltr'>
+                        <div class='title'>Welcome to Rovaya Team, {firstName}! 🎉</div>
+                        <p class='text'>Your account as an Admin has been successfully created. Please follow these steps:</p>
+                        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;'>
+                            <p style='margin: 5px 0; font-weight: 600; color: #123E34;'>1️⃣ Temporary Password:</p>
+                            <div class='password-box'>{temporaryPassword}</div>
+                        </div>
+                        <p style='margin: 15px 0; font-weight: 600; color: #123E34;'>2️⃣ Confirm your email:</p>
+                        <div style='text-align: center; margin: 15px 0;'>
+                            <a href='{confirmationLink}' class='btn'>Confirm Email</a>
+                        </div>
+                        <div class='warning'>
+                            <strong>⚠️ Important:</strong><br>
+                            • Please change your temporary password immediately after first login<br>
+                            • This link is valid for 24 hours only<br>
+                            • If you don't confirm within this time, please contact your manager
+                        </div>
+                    </div>
+                    <div class='footer'>&copy; {DateTime.UtcNow.Year} Rovaya. All rights reserved.</div>
+                </div>
+            </body></html>";
+        }
+
+        // ================== Business Logic Methods ==================
 
         public async Task<ChangePasswordResponse> ChangePasswordAsync(ClaimsPrincipal user, ChangePasswordRequest request)
         {
             try
             {
-                // استخراج userId من الـ Token
                 var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return new ChangePasswordResponse
-                    {
-                        Success = false,
-                        Message = "غير مصرح بتنفيذ هذه العملية"
-                    };
-                }
+                if (string.IsNullOrEmpty(userId)) return new ChangePasswordResponse { Success = false, Message = "غير مصرح بتنفيذ هذه العملية" };
 
-                // جلب المستخدم
                 var appUser = await _userManager.FindByIdAsync(userId);
-                if (appUser == null)
-                {
-                    return new ChangePasswordResponse
-                    {
-                        Success = false,
-                        Message = "المستخدم غير موجود"
-                    };
-                }
+                if (appUser == null) return new ChangePasswordResponse { Success = false, Message = "المستخدم غير موجود" };
 
-                // التحقق من كلمة المرور الحالية
                 var isPasswordValid = await _userManager.CheckPasswordAsync(appUser, request.CurrentPassword);
-                if (!isPasswordValid)
-                {
-                    return new ChangePasswordResponse
-                    {
-                        Success = false,
-                        Message = "كلمة المرور الحالية غير صحيحة"
-                    };
-                }
+                if (!isPasswordValid) return new ChangePasswordResponse { Success = false, Message = "كلمة المرور الحالية غير صحيحة" };
 
-                // منع استخدام نفس كلمة المرور
-                if (request.CurrentPassword == request.NewPassword)
-                {
-                    return new ChangePasswordResponse
-                    {
-                        Success = false,
-                        Message = "كلمة المرور الجديدة يجب أن تختلف عن كلمة المرور الحالية"
-                    };
-                }
+                if (request.CurrentPassword == request.NewPassword) return new ChangePasswordResponse { Success = false, Message = "كلمة المرور الجديدة يجب أن تختلف عن كلمة المرور الحالية" };
 
-                // تغيير كلمة المرور
                 var changeResult = await _userManager.ChangePasswordAsync(appUser, request.CurrentPassword, request.NewPassword);
                 if (!changeResult.Succeeded)
                 {
                     var errors = string.Join(", ", changeResult.Errors.Select(e => e.Description));
-                    return new ChangePasswordResponse
-                    {
-                        Success = false,
-                        Message = $"فشل تغيير كلمة المرور: {errors}"
-                    };
+                    return new ChangePasswordResponse { Success = false, Message = $"فشل تغيير كلمة المرور: {errors}" };
                 }
 
-                // تحديث Security Stamp لإسقاط الجلسات القديمة
                 await _userManager.UpdateSecurityStampAsync(appUser);
 
-                // إرسال إيميل التأكيد
                 try
                 {
                     var emailBody = BuildPasswordChangedEmailTemplate(appUser.FirstName);
-                    await _emailSender.SendEmailAsync(
-                        appUser.Email,
-                        "Password Changed Successfully | تم تغيير كلمة المرور بنجاح - Rovaya",
-                        emailBody
-                    );
+                    await _emailSender.SendEmailAsync(appUser.Email, "Password Changed Successfully | تم تغيير كلمة المرور بنجاح - Rovaya", emailBody);
                 }
-                catch
-                {
-                    // نتجاهل خطأ الإيميل لضمان نجاح العملية الأساسية
-                }
+                catch { }
 
-                return new ChangePasswordResponse
-                {
-                    Success = true,
-                    Message = "تم تغيير كلمة المرور بنجاح، وتم تسجيل الخروج من الأجهزة الأخرى لحماية حسابك."
-                };
+                return new ChangePasswordResponse { Success = true, Message = "تم تغيير كلمة المرور بنجاح، وتم تسجيل الخروج من الأجهزة الأخرى لحماية حسابك." };
             }
             catch (Exception ex)
             {
-                return new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = $"حدث خطأ غير متوقع أثناء تغيير كلمة المرور: {ex.Message}"
-                };
+                return new ChangePasswordResponse { Success = false, Message = $"حدث خطأ غير متوقع أثناء تغيير كلمة المرور: {ex.Message}" };
             }
         }
 
@@ -587,135 +589,58 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
         {
             try
             {
-                // 1. استخراج userId من الـ Token
                 var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return new DeleteAccountResponse
-                    {
-                        Success = false,
-                        Message = "غير مصرح بتنفيذ هذه العملية"
-                    };
-                }
+                if (string.IsNullOrEmpty(userId)) return new DeleteAccountResponse { Success = false, Message = "غير مصرح بتنفيذ هذه العملية" };
 
-                // 2. جلب المستخدم
                 var appUser = await _userManager.FindByIdAsync(userId);
-                if (appUser == null)
-                {
-                    return new DeleteAccountResponse
-                    {
-                        Success = false,
-                        Message = "المستخدم غير موجود"
-                    };
-                }
+                if (appUser == null) return new DeleteAccountResponse { Success = false, Message = "المستخدم غير موجود" };
 
-                // 3. التحقق من كلمة المرور (خطوة أمنية إلزامية)
                 var isPasswordValid = await _userManager.CheckPasswordAsync(appUser, request.Password);
-                if (!isPasswordValid)
-                {
-                    return new DeleteAccountResponse
-                    {
-                        Success = false,
-                        Message = "كلمة المرور غير صحيحة. يرجى إدخال كلمة المرور الصحيحة لتأكيد حذف الحساب."
-                    };
-                }
+                if (!isPasswordValid) return new DeleteAccountResponse { Success = false, Message = "كلمة المرور غير صحيحة. يرجى إدخال كلمة المرور الصحيحة لتأكيد حذف الحساب." };
 
-                // 4. إرسال إيميل تنبيه قبل الحذف (Try-Catch منفصل)
                 try
                 {
                     var emailBody = BuildAccountDeletionEmailTemplate(appUser.FirstName);
-                    await _emailSender.SendEmailAsync(
-                        appUser.Email,
-                        "Account Deleted | تم حذف حسابك - Rovaya",
-                        emailBody
-                    );
+                    await _emailSender.SendEmailAsync(appUser.Email, "Account Deleted | تم حذف حسابك - Rovaya", emailBody);
                 }
-                catch
-                {
-                    // نتجاهل خطأ الإيميل لضمان نجاح الحذف
-                }
+                catch { }
 
-                // 5. حذف المستخدم (Identity سيتولى حذف البيانات المرتبطة تلقائياً بفضل Cascade)
                 var deleteResult = await _userManager.DeleteAsync(appUser);
                 if (!deleteResult.Succeeded)
                 {
                     var errors = string.Join(", ", deleteResult.Errors.Select(e => e.Description));
-                    return new DeleteAccountResponse
-                    {
-                        Success = false,
-                        Message = $"فشل في حذف الحساب: {errors}"
-                    };
+                    return new DeleteAccountResponse { Success = false, Message = $"فشل في حذف الحساب: {errors}" };
                 }
 
-                return new DeleteAccountResponse
-                {
-                    Success = true,
-                    Message = "تم حذف حسابك بنجاح. نأسف لرحيلك!"
-                };
+                // ✅ تسجيل حدث حذف الحساب في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    user,
+                    "DeleteAccount",
+                    appUser.Id,
+                    $"{appUser.FirstName} {appUser.LastName}",
+                    "تم حذف الحساب بشكل نهائي من النظام",
+                    null
+                );
+
+                return new DeleteAccountResponse { Success = true, Message = "تم حذف حسابك بنجاح. نأسف لرحيلك!" };
             }
             catch (Exception ex)
             {
-                return new DeleteAccountResponse
-                {
-                    Success = false,
-                    Message = $"حدث خطأ غير متوقع أثناء حذف الحساب: {ex.Message}"
-                };
+                return new DeleteAccountResponse { Success = false, Message = $"حدث خطأ غير متوقع أثناء حذف الحساب: {ex.Message}" };
             }
         }
 
-        private string BuildAccountDeletionEmailTemplate(string firstName)
-        {
-            return $@"
-    <!DOCTYPE html><html><head><meta charset='UTF-8'><style>
-        body {{ font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f4f6f4; margin: 0; padding: 0; }}
-        .email-container {{ max-width: 600px; margin: 30px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(18, 62, 52, 0.08); }}
-        .header {{ background-color: #123E34; padding: 35px 20px; text-align: center; }}
-        .brand-name {{ color: #ffffff; font-size: 32px; font-weight: 800; margin: 0; }}
-        .section {{ padding: 30px; text-align: center; }}
-        .rtl {{ direction: rtl; }}
-        .ltr {{ direction: ltr; }}
-        .title {{ font-size: 20px; font-weight: 700; color: #123E34; margin-bottom: 12px; }}
-        .text {{ font-size: 14px; line-height: 1.7; color: #555555; margin-bottom: 15px; }}
-        .warning-icon {{ font-size: 48px; margin-bottom: 10px; }}
-        .footer {{ background-color: #F9FAF7; padding: 20px; text-align: center; font-size: 12px; color: #888888; }}
-    </style></head><body>
-        <div class='email-container'>
-            <div class='header'><h1 class='brand-name'>ROVAYA</h1></div>
-            <div class='section rtl'>
-                <div class='warning-icon'>👋</div>
-                <div class='title'>وداعاً، {firstName}</div>
-                <p class='text'>نود إعلامك بأنه تم حذف حسابك في منصة Rovaya بنجاح.</p>
-                <p class='text'>تم حذف جميع بياناتك الشخصية، بما في ذلك الملف الطبي وأرقام الطوارئ، بشكل نهائي من قواعد بياناتنا.</p>
-                <p class='text' style='color: #2ECC71; font-weight: 600;'>نتمنى لك رحلات سعيدة ومغامرات رائعة في فلسطين! 🇵🇸</p>
-            </div>
-            <div style='border-top: 1px solid #edf2f7; margin: 0 30px;'></div>
-            <div class='section ltr'>
-                <div class='warning-icon'>👋</div>
-                <div class='title'>Goodbye, {firstName}</div>
-                <p class='text'>We would like to inform you that your Rovaya account has been successfully deleted.</p>
-                <p class='text'>All your personal data, including your medical profile and emergency numbers, has been permanently removed from our databases.</p>
-                <p class='text' style='color: #2ECC71; font-weight: 600;'>We wish you happy journeys and wonderful adventures in Palestine! 🇵🇸</p>
-            </div>
-            <div class='footer'>&copy; {DateTime.UtcNow.Year} Rovaya. All rights reserved.</div>
-        </div>
-    </body></html>";
-        }
-        public async Task<CreateEmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request)
+        // ⚠️ تم إضافة ClaimsPrincipal callerUser كمعامل أول هنا
+        public async Task<CreateEmployeeResponse> CreateEmployeeAsync(ClaimsPrincipal callerUser, CreateEmployeeRequest request)
         {
             try
             {
-                // 1. التحقق من عدم وجود الإيميل مسبقاً
                 var existingUser = await _userManager.FindByEmailAsync(request.Email);
                 if (existingUser != null)
                 {
-                    return new CreateEmployeeResponse
-                    {
-                        Success = false,
-                        Message = "هذا البريد الإلكتروني مسجل مسبقاً في النظام"
-                    };
+                    return new CreateEmployeeResponse { Success = false, Message = "هذا البريد الإلكتروني مسجل مسبقاً في النظام" };
                 }
 
-                // 2. إنشاء المستخدم (EmailConfirmed = false ليحتاج لتأكيد الإيميل)
                 var user = new ApplicationUser
                 {
                     FirstName = request.FirstName,
@@ -723,7 +648,7 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                     Email = request.Email,
                     UserName = request.Email,
                     Country = request.Country ?? "فلسطين",
-                    EmailConfirmed = false, // يحتاج لتأكيد الإيميل
+                    EmailConfirmed = false,
                     CreatedAt = DateTime.UtcNow,
                     LastConfirmationEmailSentAt = DateTime.UtcNow
                 };
@@ -732,18 +657,21 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                 if (!createResult.Succeeded)
                 {
                     var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
-                    return new CreateEmployeeResponse
-                    {
-                        Success = false,
-                        Message = $"فشل في إنشاء الحساب: {errors}"
-                    };
+                    return new CreateEmployeeResponse { Success = false, Message = $"فشل في إنشاء الحساب: {errors}" };
                 }
 
-                // 3. إضافة دور Admin
                 await _userManager.AddToRoleAsync(user, "Admin");
-
-                // 4. إرسال إيميل التأكيد مع تنبيه تغيير كلمة المرور
                 await SendEmployeeConfirmationEmailAsync(user, request.TemporaryPassword);
+
+                // ✅ تسجيل حدث إنشاء موظف جديد في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    callerUser,
+                    "CreateEmployee",
+                    user.Id,
+                    $"{user.FirstName} {user.LastName}",
+                    "تم إنشاء حساب موظف (Admin) جديد",
+                    null
+                );
 
                 return new CreateEmployeeResponse
                 {
@@ -754,11 +682,7 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
             }
             catch (Exception ex)
             {
-                return new CreateEmployeeResponse
-                {
-                    Success = false,
-                    Message = $"حدث خطأ غير متوقع: {ex.Message}"
-                };
+                return new CreateEmployeeResponse { Success = false, Message = $"حدث خطأ غير متوقع: {ex.Message}" };
             }
         }
 
@@ -768,119 +692,32 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
             var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
             var baseUrl = _configuration["AppUrl"] ?? "https://localhost:7194";
             var confirmationLink = $"{baseUrl}/api/auth/account/ConfirmEmail?userId={user.Id}&token={encodedToken}";
-
             var emailBody = BuildEmployeeConfirmationEmailTemplate(user.FirstName, confirmationLink, temporaryPassword);
 
-            await _emailSender.SendEmailAsync(
-                user.Email,
-                "Welcome to Rovaya Team | أهلاً بك في فريق Rovaya",
-                emailBody
-            );
+            await _emailSender.SendEmailAsync(user.Email, "Welcome to Rovaya Team | أهلاً بك في فريق Rovaya", emailBody);
         }
-        private string BuildEmployeeConfirmationEmailTemplate(string firstName, string confirmationLink, string temporaryPassword)
-        {
-            return $@"
-    <!DOCTYPE html><html><head><meta charset='UTF-8'><style>
-        body {{ font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f4f6f4; margin: 0; padding: 0; }}
-        .email-container {{ max-width: 600px; margin: 30px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(18, 62, 52, 0.08); }}
-        .header {{ background-color: #123E34; padding: 35px 20px; text-align: center; }}
-        .brand-name {{ color: #ffffff; font-size: 32px; font-weight: 800; margin: 0; }}
-        .brand-tagline {{ color: #2ECC71; font-size: 13px; margin-top: 6px; }}
-        .section {{ padding: 30px; }}
-        .rtl {{ direction: rtl; text-align: right; }}
-        .ltr {{ direction: ltr; text-align: left; }}
-        .title {{ font-size: 20px; font-weight: 700; color: #123E34; margin-bottom: 12px; }}
-        .text {{ font-size: 14px; line-height: 1.7; color: #555555; margin-bottom: 15px; }}
-        .btn {{ background-color: #123E34; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block; border: 2px solid #2ECC71; }}
-        .password-box {{ background-color: #f0fdf4; border: 2px dashed #2ECC71; color: #123E34; font-size: 18px; font-weight: 700; padding: 12px 20px; border-radius: 8px; display: inline-block; margin: 10px 0; letter-spacing: 2px; }}
-        .warning {{ background-color: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 15px; border-left: 4px solid #ffc107; }}
-        .footer {{ background-color: #F9FAF7; padding: 20px; text-align: center; font-size: 12px; color: #888888; }}
-    </style></head><body>
-        <div class='email-container'>
-            <div class='header'><h1 class='brand-name'>ROVAYA</h1><div class='brand-tagline'>اكتشف فلسطين ... بطريقتك</div></div>
-            
-            <div class='section rtl'>
-                <div class='title'>أهلاً بك في فريق Rovaya، {firstName}! 🎉</div>
-                <p class='text'>تم إنشاء حسابك كمدير في منصة Rovaya بنجاح. يرجى اتباع الخطوات التالية:</p>
-                
-                <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;'>
-                    <p style='margin: 5px 0; font-weight: 600; color: #123E34;'>1️⃣ كلمة المرور المبدئية:</p>
-                    <div class='password-box'>{temporaryPassword}</div>
-                </div>
-                
-                <p style='margin: 15px 0; font-weight: 600; color: #123E34;'>2️⃣ تأكيد بريدك الإلكتروني:</p>
-                <div style='text-align: center; margin: 15px 0;'>
-                    <a href='{confirmationLink}' class='btn'>تأكيد البريد الإلكتروني</a>
-                </div>
-                
-                <div class='warning'>
-                    <strong>⚠️ مهم جداً:</strong><br>
-                    • يرجى تغيير كلمة المرور المبدئية فور تسجيل الدخول لأول مرة<br>
-                    • هذا الرابط صالح لمدة 24 ساعة فقط<br>
-                    • إذا لم تقم بتأكيد الحساب خلال هذه المدة، يرجى التواصل مع المدير
-                </div>
-            </div>
-            
-            <div style='border-top: 1px solid #edf2f7; margin: 0 30px;'></div>
-            
-            <div class='section ltr'>
-                <div class='title'>Welcome to Rovaya Team, {firstName}! 🎉</div>
-                <p class='text'>Your account as an Admin has been successfully created. Please follow these steps:</p>
-                
-                <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;'>
-                    <p style='margin: 5px 0; font-weight: 600; color: #123E34;'>1️⃣ Temporary Password:</p>
-                    <div class='password-box'>{temporaryPassword}</div>
-                </div>
-                
-                <p style='margin: 15px 0; font-weight: 600; color: #123E34;'>2️⃣ Confirm your email:</p>
-                <div style='text-align: center; margin: 15px 0;'>
-                    <a href='{confirmationLink}' class='btn'>Confirm Email</a>
-                </div>
-                
-                <div class='warning'>
-                    <strong>⚠️ Important:</strong><br>
-                    • Please change your temporary password immediately after first login<br>
-                    • This link is valid for 24 hours only<br>
-                    • If you don't confirm within this time, please contact your manager
-                </div>
-            </div>
-            
-            <div class='footer'>&copy; {DateTime.UtcNow.Year} Rovaya. All rights reserved.</div>
-        </div>
-    </body></html>";
-        }
-
 
         public async Task<BlockUserResponse> BlockUserAsync(ClaimsPrincipal callerUser, BlockUserRequest request)
         {
             try
             {
-                // 1. جلب بيانات من يقوم بالحظر
                 var callerId = callerUser.FindFirstValue(ClaimTypes.NameIdentifier);
                 var caller = await _userManager.FindByIdAsync(callerId);
-                if (caller == null)
-                    return new BlockUserResponse { Success = false, Message = "غير مصرح بتنفيذ هذه العملية" };
+                if (caller == null) return new BlockUserResponse { Success = false, Message = "غير مصرح بتنفيذ هذه العملية" };
 
                 var callerRoles = await _userManager.GetRolesAsync(caller);
                 bool isCallerSuperAdmin = callerRoles.Contains("SuperAdmin");
                 bool isCallerAdmin = callerRoles.Contains("Admin");
 
-                // 2. جلب المستخدم المستهدف
                 var targetUser = await _userManager.FindByIdAsync(request.TargetUserId);
-                if (targetUser == null)
-                    return new BlockUserResponse { Success = false, Message = "المستخدم المستهدف غير موجود" };
+                if (targetUser == null) return new BlockUserResponse { Success = false, Message = "المستخدم المستهدف غير موجود" };
 
                 var targetRoles = await _userManager.GetRolesAsync(targetUser);
                 bool isTargetAdminOrSuper = targetRoles.Contains("Admin") || targetRoles.Contains("SuperAdmin");
 
-                // 3. 🔒 التحقق الأمني الصارم من الصلاحيات
                 if (isCallerAdmin && isTargetAdminOrSuper)
                 {
-                    return new BlockUserResponse
-                    {
-                        Success = false,
-                        Message = "لا يحق للموظف حظر موظف آخر أو مدير نظام. هذه الصلاحية محجوزة للمدير الفائق (SuperAdmin) فقط."
-                    };
+                    return new BlockUserResponse { Success = false, Message = "لا يحق للموظف حظر موظف آخر أو مدير نظام. هذه الصلاحية محجوزة للمدير الفائق (SuperAdmin) فقط." };
                 }
 
                 if (!isCallerSuperAdmin && !isCallerAdmin)
@@ -888,54 +725,41 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                     return new BlockUserResponse { Success = false, Message = "لا تملك صلاحية تنفيذ هذا الإجراء" };
                 }
 
-                // 4. تطبيق الحظر (المنطق المرن الجديد)
                 DateTime? expirationDate = null;
                 string durationMsg = "بشكل دائم";
 
-                // التحقق مما إذا كان الحظر مؤقتاً (يوجد قيمة ووحدة قياس)
                 if (request.DurationValue.HasValue && request.DurationValue > 0 && request.DurationUnit.HasValue)
                 {
                     var now = DateTime.UtcNow;
-
                     switch (request.DurationUnit.Value)
                     {
-                        case BlockDurationUnit.Minutes:
-                            expirationDate = now.AddMinutes(request.DurationValue.Value);
-                            durationMsg = $"لمدة {request.DurationValue.Value} دقيقة";
-                            break;
-                        case BlockDurationUnit.Hours:
-                            expirationDate = now.AddHours(request.DurationValue.Value);
-                            durationMsg = $"لمدة {request.DurationValue.Value} ساعة";
-                            break;
-                        case BlockDurationUnit.Days:
-                            expirationDate = now.AddDays(request.DurationValue.Value);
-                            durationMsg = $"لمدة {request.DurationValue.Value} يوم";
-                            break;
-                        case BlockDurationUnit.Months:
-                            expirationDate = now.AddMonths(request.DurationValue.Value);
-                            durationMsg = $"لمدة {request.DurationValue.Value} شهر";
-                            break;
-                        case BlockDurationUnit.Years:
-                            expirationDate = now.AddYears(request.DurationValue.Value);
-                            durationMsg = $"لمدة {request.DurationValue.Value} سنة";
-                            break;
+                        case BlockDurationUnit.Minutes: expirationDate = now.AddMinutes(request.DurationValue.Value); durationMsg = $"لمدة {request.DurationValue.Value} دقيقة"; break;
+                        case BlockDurationUnit.Hours: expirationDate = now.AddHours(request.DurationValue.Value); durationMsg = $"لمدة {request.DurationValue.Value} ساعة"; break;
+                        case BlockDurationUnit.Days: expirationDate = now.AddDays(request.DurationValue.Value); durationMsg = $"لمدة {request.DurationValue.Value} يوم"; break;
+                        case BlockDurationUnit.Months: expirationDate = now.AddMonths(request.DurationValue.Value); durationMsg = $"لمدة {request.DurationValue.Value} شهر"; break;
+                        case BlockDurationUnit.Years: expirationDate = now.AddYears(request.DurationValue.Value); durationMsg = $"لمدة {request.DurationValue.Value} سنة"; break;
                     }
-
                     targetUser.Status = AccountStatus.TemporarilyBlocked;
                 }
                 else
                 {
-                    // إذا لم يتم تحديد مدة، فهو حظر دائم
                     targetUser.Status = AccountStatus.PermanentlyBlocked;
                 }
 
                 targetUser.BlockExpirationDate = expirationDate;
                 targetUser.BlockReason = request.Reason;
-
                 await _userManager.UpdateAsync(targetUser);
-
-                // 5. إسقاط جلسات الدخول الحالية للمستخدم المحظور فوراً (أمان عالي)
                 await _userManager.UpdateSecurityStampAsync(targetUser);
+
+                // ✅ تسجيل حدث الحظر في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    callerUser,
+                    "Block",
+                    targetUser.Id,
+                    $"{targetUser.FirstName} {targetUser.LastName}",
+                    durationMsg,
+                    request.Reason
+                );
 
                 return new BlockUserResponse
                 {
@@ -945,13 +769,10 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
             }
             catch (Exception ex)
             {
-                return new BlockUserResponse
-                {
-                    Success = false,
-                    Message = $"حدث خطأ غير متوقع أثناء حظر المستخدم: {ex.Message}"
-                };
+                return new BlockUserResponse { Success = false, Message = $"حدث خطأ غير متوقع أثناء حظر المستخدم: {ex.Message}" };
             }
         }
+
         public async Task<BlockUserResponse> UnblockUserAsync(ClaimsPrincipal callerUser, string targetUserId)
         {
             try
@@ -969,39 +790,32 @@ public async Task<LoginResponse> LoginAsync(LoginRequest loginRequest)
                 var targetRoles = await _userManager.GetRolesAsync(targetUser);
                 bool isTargetAdminOrSuper = targetRoles.Contains("Admin") || targetRoles.Contains("SuperAdmin");
 
-                // نفس التحقق الأمني
                 if (isCallerAdmin && isTargetAdminOrSuper)
                 {
                     return new BlockUserResponse { Success = false, Message = "لا يحق للموظف فك الحظر عن موظف آخر أو مدير." };
                 }
 
-                // إعادة الحالة إلى نشط
                 targetUser.Status = AccountStatus.Active;
                 targetUser.BlockReason = null;
                 targetUser.BlockExpirationDate = null;
-
                 await _userManager.UpdateAsync(targetUser);
 
-                return new BlockUserResponse
-                {
-                    Success = true,
-                    Message = $"تم فك الحظر عن المستخدم {targetUser.Email} بنجاح."
-                };
+                // ✅ تسجيل حدث فك الحظر في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    callerUser,
+                    "Unblock",
+                    targetUser.Id,
+                    $"{targetUser.FirstName} {targetUser.LastName}",
+                    "تم فك الحظر عن المستخدم",
+                    null
+                );
+
+                return new BlockUserResponse { Success = true, Message = $"تم فك الحظر عن المستخدم {targetUser.Email} بنجاح." };
             }
             catch (Exception ex)
             {
                 return new BlockUserResponse { Success = false, Message = $"حدث خطأ: {ex.Message}" };
             }
         }
-
-
-
-
-
-
-
-
-
-
     }
 }

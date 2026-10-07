@@ -14,10 +14,10 @@ namespace Rovaya.DAL.Data
         public DbSet<TourismGuideCategoryTranslation> TourismGuideCategoryTranslations { get; set; }
         public DbSet<TourismGuidePlace> TourismGuidePlaces { get; set; }
         public DbSet<TourismGuidePlaceTranslation> TourismGuidePlaceTranslations { get; set; }
+        public DbSet<Rovaya.DAL.Models.AuditLog> AuditLogs { get; set; }
 
 
-
-
+        public DbSet<Rovaya.DAL.Models.Recommendations.RovayaRecommendation> RovayaRecommendations { get; set; }
 
 
         public DbSet<CitySection> CitySections { get; set; }

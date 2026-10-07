@@ -155,6 +155,53 @@ namespace Rovaya.DAL.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Rovaya.DAL.Models.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PerformedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PerformedByUserName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TargetUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetUserName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PerformedByUserId");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("Rovaya.DAL.Models.Auth.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -296,6 +343,73 @@ namespace Rovaya.DAL.Migrations
                         .IsUnique();
 
                     b.ToTable("UserMedicalProfiles");
+                });
+
+            modelBuilder.Entity("Rovaya.DAL.Models.Recommendations.RovayaRecommendation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActivityType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DescriptionAr")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Occasion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Season")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SuggestedPlaceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TitleAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TitleEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("SuggestedPlaceId");
+
+                    b.ToTable("RovayaRecommendations");
                 });
 
             modelBuilder.Entity("Rovaya.DAL.Models.TourismGuide.CitySection", b =>
@@ -499,6 +613,17 @@ namespace Rovaya.DAL.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Rovaya.DAL.Models.AuditLog", b =>
+                {
+                    b.HasOne("Rovaya.DAL.Models.Auth.ApplicationUser", "PerformedByUser")
+                        .WithMany()
+                        .HasForeignKey("PerformedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PerformedByUser");
+                });
+
             modelBuilder.Entity("Rovaya.DAL.Models.Identity.UserMedicalProfile", b =>
                 {
                     b.HasOne("Rovaya.DAL.Models.Auth.ApplicationUser", "ApplicationUser")
@@ -508,6 +633,21 @@ namespace Rovaya.DAL.Migrations
                         .IsRequired();
 
                     b.Navigation("ApplicationUser");
+                });
+
+            modelBuilder.Entity("Rovaya.DAL.Models.Recommendations.RovayaRecommendation", b =>
+                {
+                    b.HasOne("Rovaya.DAL.Models.Auth.ApplicationUser", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId");
+
+                    b.HasOne("Rovaya.DAL.Models.TourismGuide.TourismGuidePlace", "SuggestedPlace")
+                        .WithMany()
+                        .HasForeignKey("SuggestedPlaceId");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("SuggestedPlace");
                 });
 
             modelBuilder.Entity("Rovaya.DAL.Models.TourismGuide.CitySection", b =>

@@ -2,8 +2,11 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Rovaya.BLL.Service.Audit;
 using Rovaya.BLL.Service.Auth;
+using Rovaya.BLL.Service.Profile;
 using Rovaya.DAL.DTO.Request.Auth;
+using Rovaya.DAL.DTO.Request.Profile;
 using Rovaya.DAL.DTO.Response.Auth;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
@@ -15,10 +18,14 @@ namespace Rovaya.PL.Controllers.Areas.Identity
     public class AccountController : ControllerBase
     {
         private readonly IAuthenticationService _authenticationService;
+        private readonly IProfileService _profileService;
+        private readonly IAuditLogService _auditLogService;
 
-        public AccountController(IAuthenticationService authenticationService)
+        public AccountController(IAuthenticationService authenticationService,IProfileService  profileService,IAuditLogService  auditLogService)
         {
             _authenticationService = authenticationService;
+            _profileService = profileService;
+            _auditLogService = auditLogService;
         }
 
         [HttpPost("register")]
@@ -188,15 +195,12 @@ namespace Rovaya.PL.Controllers.Areas.Identity
         [Authorize(Roles = "SuperAdmin")]
         public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeRequest request)
         {
-            var result = await _authenticationService.CreateEmployeeAsync(request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            var result = await _authenticationService.CreateEmployeeAsync(User, request); // لاحظ إضافة User هنا
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
-
+         
         [HttpPost("block-user")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> BlockUser([FromBody] BlockUserRequest request)
@@ -211,6 +215,129 @@ namespace Rovaya.PL.Controllers.Areas.Identity
         public async Task<IActionResult> UnblockUser([FromBody] string targetUserId)
         {
             var result = await _authenticationService.UnblockUserAsync(User, targetUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+
+
+        // ==================== Profile Management (Protected) ====================
+
+        [HttpGet("profile")]
+        [Authorize]
+        public async Task<IActionResult> GetFullProfile()
+        {
+            var result = await _profileService.GetFullProfileAsync(User);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPut("profile/basic")]
+        [Authorize]
+        public async Task<IActionResult> UpdateBasicProfile([FromBody] UpdateBasicProfileRequest request)
+        {
+            var result = await _profileService.UpdateBasicProfileAsync(User, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpGet("profile/medical")]
+        [Authorize]
+        public async Task<IActionResult> GetMedicalProfile()
+        {
+            var result = await _profileService.GetMedicalProfileAsync(User);
+            return Ok(result);
+        }
+
+        [HttpPost("profile/medical")]
+        [Authorize]
+        public async Task<IActionResult> CreateOrUpdateMedicalProfile([FromBody] MedicalProfileRequest request)
+        {
+            var result = await _profileService.CreateOrUpdateMedicalProfileAsync(User, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpDelete("profile/medical")]
+        [Authorize]
+        public async Task<IActionResult> DeleteMedicalProfile()
+        {
+            var result = await _profileService.DeleteMedicalProfileAsync(User);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpGet("profile/emergency-numbers")]
+        [Authorize]
+        public async Task<IActionResult> GetEmergencyNumbers()
+        {
+            var result = await _profileService.GetEmergencyNumbersAsync(User);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("profile/emergency-numbers")]
+        [Authorize]
+        public async Task<IActionResult> AddEmergencyNumber([FromBody] EmergencyNumberRequest request)
+        {
+            var result = await _profileService.AddEmergencyNumberAsync(User, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpDelete("profile/emergency-numbers/{phoneNumber}")]
+        [Authorize]
+        public async Task<IActionResult> RemoveEmergencyNumber(string phoneNumber)
+        {
+            var result = await _profileService.RemoveEmergencyNumberAsync(User, phoneNumber);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("profile/additional-phones")]
+        [Authorize]
+        public async Task<IActionResult> AddAdditionalPhoneNumber([FromBody] EmergencyNumberRequest request)
+        {
+            var result = await _profileService.AddAdditionalPhoneNumberAsync(User, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpDelete("profile/additional-phones/{phoneNumber}")]
+        [Authorize]
+        public async Task<IActionResult> RemoveAdditionalPhoneNumber(string phoneNumber)
+        {
+            var result = await _profileService.RemoveAdditionalPhoneNumberAsync(User, phoneNumber);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpGet("users/{targetUserId}/profile")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetUserProfileByAdmin(string targetUserId)
+        {
+            var result = await _profileService.GetUserProfileByAdminAsync(User, targetUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpGet("users")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetAllUsers()
+        {
+            var result = await _profileService.GetAllUsersAsync(User);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+
+
+
+        [HttpGet("audit-logs")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetAuditLogs([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 50)
+        {
+            var result = await _auditLogService.GetAuditLogsAsync(User, pageNumber, pageSize);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

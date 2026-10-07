@@ -19,7 +19,9 @@ namespace Rovaya.BLL.Service.Auth
 
 
         Task<DeleteAccountResponse> DeleteAccountAsync(ClaimsPrincipal user, DeleteAccountRequest request);
-        Task<CreateEmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request);
+        Task<CreateEmployeeResponse> CreateEmployeeAsync(ClaimsPrincipal callerUser, CreateEmployeeRequest request);
+
+
         Task<BlockUserResponse> BlockUserAsync(ClaimsPrincipal callerUser, BlockUserRequest request);
         Task<BlockUserResponse> UnblockUserAsync(ClaimsPrincipal callerUser, string targetUserId);
 
