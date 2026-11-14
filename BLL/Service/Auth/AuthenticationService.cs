@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using Rovaya.BLL.Service.Audit; // تمت إضافته للـ Audit
+using Rovaya.BLL.Service.Audit; 
 using Rovaya.DAL.DTO.Request.Auth;
 using Rovaya.DAL.DTO.Response.Auth;
 using Rovaya.DAL.Enums;
@@ -25,20 +25,20 @@ namespace Rovaya.BLL.Service.Auth
         private readonly IConfiguration _configuration;
         private readonly IEmailSender _emailSender;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IAuditLogService _auditLogService; // تمت إضافته
+        private readonly IAuditLogService _auditLogService; 
 
         public AuthenticationService(
             UserManager<ApplicationUser> userManager,
             IConfiguration configuration,
             IEmailSender emailSender,
             SignInManager<ApplicationUser> signInManager,
-            IAuditLogService auditLogService) // تمت إضافته
+            IAuditLogService auditLogService) 
         {
             _userManager = userManager;
             _configuration = configuration;
             _emailSender = emailSender;
             _signInManager = signInManager;
-            _auditLogService = auditLogService; // تمت إضافته
+            _auditLogService = auditLogService; 
         }
 
         public async Task<RegisterResponse> RegisterAsync(RegisterRequest registerRequest)
@@ -199,6 +199,7 @@ namespace Rovaya.BLL.Service.Auth
                     UserId = user.Id,
                     Email = user.Email,
                     FirstName = user.FirstName,
+                    LastName = user.LastName,
                     AccessToken = await GenerateAccessToken(user),
                     Roles = userRoles.ToList()
                 };
@@ -817,5 +818,154 @@ namespace Rovaya.BLL.Service.Auth
                 return new BlockUserResponse { Success = false, Message = $"حدث خطأ: {ex.Message}" };
             }
         }
+
+
+
+        public async Task<BaseResponse> DeleteUserAccountByAdminAsync(ClaimsPrincipal callerUser, string targetUserId)
+        {
+            try
+            {
+                // 1. التحقق من هوية المستخدم الذي يقوم بالحذف (Caller)
+                var callerId = callerUser.FindFirstValue(ClaimTypes.NameIdentifier);
+                var caller = await _userManager.FindByIdAsync(callerId);
+                if (caller == null)
+                    return new BaseResponse { Success = false, Message = "غير مصرح بتنفيذ هذه العملية" };
+
+                var callerRoles = await _userManager.GetRolesAsync(caller);
+                bool isCallerSuperAdmin = callerRoles.Contains("SuperAdmin");
+                bool isCallerAdmin = callerRoles.Contains("Admin");
+
+                // التأكد أن من يقوم بالحذف هو Admin أو SuperAdmin فقط
+                if (!isCallerSuperAdmin && !isCallerAdmin)
+                {
+                    return new BaseResponse { Success = false, Message = "لا تملك صلاحية تنفيذ هذا الإجراء" };
+                }
+
+                // 2. جلب بيانات المستخدم المستهدف للحذف
+                var targetUser = await _userManager.FindByIdAsync(targetUserId);
+                if (targetUser == null)
+                    return new BaseResponse { Success = false, Message = "المستخدم المستهدف غير موجود" };
+
+                // 3. التحقق من صلاحيات المستخدم المستهدف
+                var targetRoles = await _userManager.GetRolesAsync(targetUser);
+                bool isTargetAdminOrSuper = targetRoles.Contains("Admin") || targetRoles.Contains("SuperAdmin");
+
+                // 4. تطبيق قاعدة الصلاحيات: الموظف (Admin) لا يمكنه حذف موظف آخر أو مدير نظام
+                if (isCallerAdmin && isTargetAdminOrSuper)
+                {
+                    return new BaseResponse
+                    {
+                        Success = false,
+                        Message = "لا يحق للموظف حذف حساب موظف آخر أو مدير نظام. هذه الصلاحية محجوزة للمدير الفائق (SuperAdmin) فقط."
+                    };
+                }
+
+                // 5. تنفيذ عملية الحذف
+                // (اختياري) إرسال إشعار للمستخدم بأن حسابه تم حذفه
+                try
+                {
+                    var emailBody = BuildAccountDeletionEmailTemplate(targetUser.FirstName);
+                    await _emailSender.SendEmailAsync(targetUser.Email, "تم حذف حسابك - Rovaya", emailBody);
+                }
+                catch
+                {
+                    // نتجاهل فشل إرسال الإيميل لضمان استمرار عملية الحذف 
+                }
+
+                var deleteResult = await _userManager.DeleteAsync(targetUser);
+                if (!deleteResult.Succeeded)
+                {
+                    var errors = string.Join(", ", deleteResult.Errors.Select(e => e.Description));
+                    return new BaseResponse { Success = false, Message = $"فشل في حذف الحساب: {errors}" };
+                }
+
+                // 6. تسجيل العملية في سجل التدقيق (Audit Log)
+                await _auditLogService.LogActionAsync(
+                    callerUser,
+                    "DeleteUserByAdmin",
+                    targetUser.Id,
+                    $"{targetUser.FirstName} {targetUser.LastName}",
+                    "تم حذف حساب المستخدم نهائياً من قبل الإدارة",
+                    null
+                );
+
+                return new BaseResponse
+                {
+                    Success = true,
+                    Message = $"تم حذف حساب المستخدم {targetUser.Email} بشكل نهائي وبنجاح."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse { Success = false, Message = $"حدث خطأ غير متوقع أثناء حذف الحساب: {ex.Message}" };
+            }
+        }
+
+
+
+
+        // أضف هذا السطر في واجهة IAuthenticationService أولاً:
+        // Task<BaseResponse> ChangeUserRoleAsync(ClaimsPrincipal callerUser, ChangeRoleRequest request);
+
+        public async Task<BaseResponse> ChangeUserRoleAsync(ClaimsPrincipal callerUser, ChangeRoleRequest request)
+        {
+            try
+            {
+                // 1. التحقق من أن من يقوم بالتغيير هو SuperAdmin فقط
+                var callerId = callerUser.FindFirstValue(ClaimTypes.NameIdentifier);
+                var caller = await _userManager.FindByIdAsync(callerId);
+                var callerRoles = await _userManager.GetRolesAsync(caller);
+
+                if (!callerRoles.Contains("SuperAdmin"))
+                {
+                    return new BaseResponse { Success = false, Message = "غير مصرح: فقط مدير النظام (SuperAdmin) يمكنه تغيير الصلاحيات." };
+                }
+
+                // 2. جلب المستخدم المستهدف
+                var targetUser = await _userManager.FindByIdAsync(request.TargetUserId);
+                if (targetUser == null)
+                    return new BaseResponse { Success = false, Message = "المستخدم المستهدف غير موجود" };
+
+                // 3. منع الـ SuperAdmin من تغيير صلاحية نفسه (حماية أمنية)
+                if (targetUser.Id == callerId)
+                    return new BaseResponse { Success = false, Message = "لا يمكنك تغيير صلاحية حسابك الحالي من هنا." };
+
+                // 4. التحقق من صحة الصلاحية الجديدة
+                if (request.NewRole != "Admin" && request.NewRole != "SuperAdmin")
+                    return new BaseResponse { Success = false, Message = "الصلاحية المحددة غير صالحة." };
+
+                // 5. إزالة الأدوار القديمة وإضافة الدور الجديد
+                var currentRoles = await _userManager.GetRolesAsync(targetUser);
+                await _userManager.RemoveFromRolesAsync(targetUser, currentRoles);
+
+                var addResult = await _userManager.AddToRoleAsync(targetUser, request.NewRole);
+                if (!addResult.Succeeded)
+                    return new BaseResponse { Success = false, Message = "فشل في تحديث الصلاحية في قاعدة البيانات." };
+
+                // 6. تسجيل العملية في سجل التدقيق (Audit Log)
+                await _auditLogService.LogActionAsync(
+                    callerUser,
+                    "ChangeRole",
+                    targetUser.Id,
+                    $"{targetUser.FirstName} {targetUser.LastName}",
+                    $"تم تغيير الصلاحية من {string.Join(", ", currentRoles)} إلى {request.NewRole}",
+                    null
+                );
+
+                return new BaseResponse
+                {
+                    Success = true,
+                    Message = $"تم تغيير صلاحية المستخدم إلى {request.NewRole} بنجاح."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponse { Success = false, Message = $"حدث خطأ غير متوقع: {ex.Message}" };
+            }
+        }
+
+
+
+
     }
 }

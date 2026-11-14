@@ -9,23 +9,16 @@ namespace Rovaya.BLL.Service.Auth
     {
         Task<RegisterResponse> RegisterAsync(RegisterRequest registerRequest);
         Task<LoginResponse> LoginAsync(LoginRequest loginRequest);
-
         Task<BaseResponse> ResendConfirmationEmailAsync(string email);
         Task<bool> ConfirmEmailAsync(string userId, string token);
-
         Task<ForgetPasswordResponse> RequestPasswordReset(ForgetPasswordRequest request);
         Task<ResetPasswordResponse> ResetPassword(ResetPasswordRequest request);
         Task<ChangePasswordResponse> ChangePasswordAsync(ClaimsPrincipal user, ChangePasswordRequest request);
-
-
         Task<DeleteAccountResponse> DeleteAccountAsync(ClaimsPrincipal user, DeleteAccountRequest request);
         Task<CreateEmployeeResponse> CreateEmployeeAsync(ClaimsPrincipal callerUser, CreateEmployeeRequest request);
-
-
         Task<BlockUserResponse> BlockUserAsync(ClaimsPrincipal callerUser, BlockUserRequest request);
         Task<BlockUserResponse> UnblockUserAsync(ClaimsPrincipal callerUser, string targetUserId);
-
-
+        Task<BaseResponse> DeleteUserAccountByAdminAsync(ClaimsPrincipal callerUser, string targetUserId);
+        Task<BaseResponse> ChangeUserRoleAsync(ClaimsPrincipal callerUser, ChangeRoleRequest request);
     }
-
 }

@@ -18,5 +18,14 @@ namespace Rovaya.DAL.DTO.Request.Profile
 
         // صورة البروفايل (Base64 أو URL)
         public string? ProfileImageUrl { get; set; }
+
+        // ✅ تمت إضافة رقم الهاتف
+        [Phone(ErrorMessage = "صيغة رقم الهاتف غير صحيحة")]
+        public string? PhoneNumber { get; set; }
+
+        [Required(ErrorMessage = "البريد الإلكتروني مطلوب")]
+        [EmailAddress(ErrorMessage = "صيغة البريد الإلكتروني غير صحيحة")]
+        public string Email { get; set; } = null!;
+
     }
 }

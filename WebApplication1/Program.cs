@@ -14,6 +14,7 @@ using Rovaya.DAL.Repository.TourismGuid;
 using Rovaya.DAL.Utils;
 using Rovaya.PL;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
@@ -36,7 +37,7 @@ namespace WebApplication1
             // Identity
             builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
             {
-                options.Password.RequireDigit  = true;
+                options.Password.RequireDigit = true;
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = true;
                 options.Password.RequiredLength = 7;
@@ -44,38 +45,30 @@ namespace WebApplication1
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
                 options.SignIn.RequireConfirmedEmail = true;
-
-
             })
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
 
-            // Swagger Setup
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
-
             AppConfigration.Config(builder.Services);
-        
-            // Email Token Expiry (5 Minutes)
+
             builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
             {
                 options.TokenLifespan = TimeSpan.FromMinutes(5);
             });
 
-            // Rate Limiter Service Configuration (يجب أن تكون قبل builder.Build)
             builder.Services.AddRateLimiter(options =>
             {
                 options.AddFixedWindowLimiter("StrictEmailPolicy", opt =>
                 {
-                    opt.PermitLimit = 2; // يسمح بطلبين فقط
-                    opt.Window = TimeSpan.FromMinutes(1); // كل دقيقة واحدة
-                    opt.QueueLimit = 0; // بدون انتظار في الطابور
+                    opt.PermitLimit = 2;
+                    opt.Window = TimeSpan.FromMinutes(1);
+                    opt.QueueLimit = 0;
                 });
-
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             });
 
-            // Authentication & JWT Setup
             builder.Services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -96,24 +89,35 @@ namespace WebApplication1
                 };
             });
 
-            // CORS Policy Setup
+            // ==========================================
+            // ✅ إعدادات CORS النهائية (تسمح للتطوير والإنتاج والموبايل)
+            // ==========================================
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy("AllowAll", policy =>
+                options.AddPolicy("AllowRovayaApps", policy =>
                 {
-                    policy.AllowAnyOrigin()
-                          .AllowAnyMethod()
-                          .AllowAnyHeader();
+                    policy.WithOrigins(
+                        "http://localhost:5173",          // تطوير الويب (Vite)
+                        "https://rovaya.onrender.com",     // إنتاج الويب
+                        "http://localhost:3000",           // تطوير بديل
+                        "capacitor://localhost",           // للموبايل (إذا كنت تستخدم Capacitor)
+                        "http://localhost"    ,
+                        "https://rovaya.vercel.app"// للموبايل أحياناً
+                    )
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .AllowCredentials(); // ضروري جداً لمرور التوكنات
                 });
             });
 
-            // =========================================================
-            // Build the Application (هنا يتوقف إضافة الخدمات للـ DI)
-            // =========================================================
+            // ==========================================
+            // بناء التطبيق (هنا ينتهي تسجيل الخدمات)
+            // ==========================================
             var app = builder.Build();
-            // =========================================================
 
-            // 2. Middleware Pipeline Configuration
+            // ==========================================
+            // ✅ ترتيب الـ Middleware (مهم جداً لا تغيره)
+            // ==========================================
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -123,15 +127,13 @@ namespace WebApplication1
 
             app.UseHttpsRedirection();
 
-            // Static Files for image access from wwwroot
+            // السماح بقراءة الصور من مجلد wwwroot
             app.UseStaticFiles();
 
-            // CORS Middleware
-            app.UseCors("AllowAll");
+            // ✅ تفعيل CORS هنا (يجب أن يكون قبل Authentication)
+            app.UseCors("AllowRovayaApps");
 
-            // Rate Limiter Middleware
             app.UseRateLimiter();
-
             app.UseAuthentication();
             app.UseAuthorization();
 
@@ -141,40 +143,21 @@ namespace WebApplication1
                 var services = scope.ServiceProvider;
                 try
                 {
-                    // الخطوة الأولى: إنشاء الأدوار
-                    var roleSeeders = services.GetServices<ISeedData>()
-                        .OfType<RoleSeedData>()
-                        .ToList();
+                    var roleSeeders = services.GetServices<ISeedData>().OfType<RoleSeedData>().ToList();
+                    foreach (var seeder in roleSeeders) await seeder.DataSeed();
 
-                    foreach (var seeder in roleSeeders)
-                    {
-                        await seeder.DataSeed();
-                    }
-
-                    // الخطوة الثانية: إنشاء المستخدمين
-                    var userSeeders = services.GetServices<ISeedData>()
-                        .OfType<UserSeedData>()
-                        .ToList();
-
-                    foreach (var seeder in userSeeders)
-                    {
-                        await seeder.DataSeed();
-                    }
+                    var userSeeders = services.GetServices<ISeedData>().OfType<UserSeedData>().ToList();
+                    foreach (var seeder in userSeeders) await seeder.DataSeed();
 
                     Console.WriteLine("✅ Data Seeding completed successfully.");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ An error occurred while seeding the database: {ex.Message}");
-                    if (ex.InnerException != null)
-                    {
-                        Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
-                    }
+                    Console.WriteLine($"❌ Seeding error: {ex.Message}");
                 }
             }
 
             app.MapControllers();
-
             app.Run();
         }
     }

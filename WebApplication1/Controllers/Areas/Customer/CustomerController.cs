@@ -6,6 +6,7 @@ using Rovaya.BLL.Service.TourismGuide;
 using Rovaya.DAL.DTO.Request.Recommendations;
 using Rovaya.DAL.DTO.Request.TourismGuid;
 using Rovaya.DAL.Enums;
+using System.Security.Claims;
 
 namespace Rovaya.PL.Controllers.Areas.Customer
 {
@@ -17,12 +18,14 @@ namespace Rovaya.PL.Controllers.Areas.Customer
         private readonly ITourismGuidService _tourismService;
         private readonly ITourismNewsService _tourismNewsService;
         private readonly IRecommendationService _recommendationService;
+        private readonly ITripPlannerService _tripPlannerService;
 
-        public CustomerController(ITourismGuidService tourismService, ITourismNewsService tourismNewsService , IRecommendationService recommendationService)
+        public CustomerController(ITourismGuidService tourismService, ITourismNewsService tourismNewsService , IRecommendationService recommendationService, ITripPlannerService tripPlannerService)
         {
             _tourismService = tourismService;
             _tourismNewsService = tourismNewsService;
             _recommendationService = recommendationService;
+            _tripPlannerService = tripPlannerService;
         }
 
         // ================= Tourism Guide Categories =================
@@ -174,6 +177,75 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             var result = await _recommendationService.GetRecommendationsByActivityAsync(activityType, pageNumber, pageSize);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
+        } 
+
+
+
+
+
+
+
+        // ✅ الدالة المساعدة التي كانت مفقودة
+        private string GetUserId()
+        {
+            return User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown";
+        }
+
+
+
+        [HttpPost("generate")]
+        public async Task<IActionResult> GenerateTrip([FromBody] GenerateTripRequest request )
+        {
+            try
+            {
+                var result = await _tripPlannerService.GenerateTripAsync(request, GetUserId());
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+
+
+
+
+        [HttpGet("place-details/{placeName}")]
+        public async Task<IActionResult> GetPlaceDetails(
+    string placeName,
+    [FromQuery] string? placeNameEn = null,
+    [FromQuery] string? city = null)
+        {
+            try
+            {
+                var result = await _tripPlannerService.GetPlaceDetailsAsync(placeName, placeNameEn, city);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+
+
+        [HttpPost("place-details")]
+        public async Task<IActionResult> GetPlaceDetailsPost([FromBody] PlaceDetailsRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.PlaceName))
+                return BadRequest(new { success = false, message = "اسم المكان مطلوب" });
+
+            try
+            {
+                var result = await _tripPlannerService.GetPlaceDetailsAsync(
+                    request.PlaceName, request.PlaceNameEn, request.City, request.Description);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
 
@@ -182,6 +254,85 @@ namespace Rovaya.PL.Controllers.Areas.Customer
 
 
 
+
+
+        [HttpGet("my-trips")]
+        public async Task<IActionResult> GetMyTrips()
+        {
+            var trips = await _tripPlannerService.GetUserTripsAsync(GetUserId());
+            return Ok(new { success = true, data = trips });
+        }
+
+
+        [HttpPost("modify-trip")]
+        public async Task<IActionResult> ModifyTrip([FromBody] ModifyTripRequest request)
+        {
+            try
+            {
+                var result = await _tripPlannerService.ModifyTripAsync(request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        // جلب الخطة النشطة
+        [HttpGet("active-trip")]
+        public async Task<IActionResult> GetActiveTrip()
+        {
+            var trip = await _tripPlannerService.GetActiveTripAsync(GetUserId());
+
+            if (trip == null)
+            {
+                return Ok(new { success = true, data = (object?)null, message = "لا توجد خطة نشطة حالياً" });
+            }
+
+            return Ok(new { success = true, data = trip });
+        }
+
+        // تفعيل خطة معينة
+        [HttpPost("activate-trip/{tripId}")]
+        public async Task<IActionResult> ActivateTrip(int tripId)
+        {
+            var result = await _tripPlannerService.ActivateTripAsync(GetUserId(), tripId);
+
+            if (!result)
+            {
+                return BadRequest(new { success = false, message = "فشل في تفعيل الخطة" });
+            }
+
+            return Ok(new { success = true, message = "تم تفعيل الخطة بنجاح" });
+        }
+
+        // أرشفة خطة
+        [HttpPost("archive-trip/{tripId}")]
+        public async Task<IActionResult> ArchiveTrip(int tripId)
+        {
+            var result = await _tripPlannerService.ArchiveTripAsync(GetUserId(), tripId);
+
+            if (!result)
+            {
+                return BadRequest(new { success = false, message = "فشل في أرشفة الخطة" });
+            }
+
+            return Ok(new { success = true, message = "تم أرشفة الخطة بنجاح" });
+        }
+
+        // حذف خطة
+        [HttpDelete("delete-trip/{tripId}")]
+        public async Task<IActionResult> DeleteTrip(int tripId)
+        {
+            var result = await _tripPlannerService.DeleteTripAsync(GetUserId(), tripId);
+            
+            if (!result)
+            {
+                return BadRequest(new { success = false, message = "فشل في حذف الخطة" });
+            }
+
+            return Ok(new { success = true, message = "تم حذف الخطة بنجاح" });
+        }
 
 
 

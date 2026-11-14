@@ -1,4 +1,5 @@
-﻿using Rovaya.DAL.DTO.Request.Profile;
+﻿using Microsoft.AspNetCore.Http;
+using Rovaya.DAL.DTO.Request.Profile;
 using Rovaya.DAL.DTO.Response;
 using Rovaya.DAL.DTO.Response.Profile;
 using System.Security.Claims;
@@ -17,6 +18,10 @@ namespace Rovaya.BLL.Service.Profile
         Task<EmergencyNumbersResponse> GetEmergencyNumbersAsync(ClaimsPrincipal user);
         Task<BaseResponse> AddEmergencyNumberAsync(ClaimsPrincipal user, EmergencyNumberRequest request);
         Task<BaseResponse> RemoveEmergencyNumberAsync(ClaimsPrincipal user, string phoneNumber);
+
+        Task<UploadImageResponse> UploadProfileImageAsync(ClaimsPrincipal user, IFormFile file);
+
+
 
         Task<BaseResponse> AddAdditionalPhoneNumberAsync(ClaimsPrincipal user, EmergencyNumberRequest request);
         Task<BaseResponse> RemoveAdditionalPhoneNumberAsync(ClaimsPrincipal user, string phoneNumber);

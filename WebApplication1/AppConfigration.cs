@@ -48,6 +48,25 @@ namespace Rovaya.PL
             // Recommendation Services
             Services.AddScoped<IRecommendationRepository, RecommendationRepository>();
             Services.AddScoped<IRecommendationService, RecommendationService>();
+            Services.AddScoped<ITripPlannerService, TripPlannerService>();
+
+
+
+            // 1. تسجيل الـ Service
+            Services.AddScoped<ITripPlannerService, TripPlannerService>();
+
+      
+
+            Services.AddHttpClient("PythonTripPlanner", client =>
+            {
+                client.BaseAddress = new Uri("https://rovaya-ai.onrender.com");
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+
+                // ⚠️ هذا السطر هو الحل! مهم جداً لـ Cold Start
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
+
+
 
 
         }

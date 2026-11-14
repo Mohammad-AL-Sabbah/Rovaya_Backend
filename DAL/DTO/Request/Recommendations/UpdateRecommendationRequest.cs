@@ -1,4 +1,5 @@
-﻿using Rovaya.DAL.Enums;
+﻿using Microsoft.AspNetCore.Http;
+using Rovaya.DAL.Enums;
 using System.ComponentModel.DataAnnotations;
 
 namespace Rovaya.DAL.DTO.Request.Recommendations
@@ -16,14 +17,16 @@ namespace Rovaya.DAL.DTO.Request.Recommendations
         [MaxLength(200)]
         public string TitleEn { get; set; } = null!;
 
+        [Required]  // ✅ أضفنا Required
         [MaxLength(1000)]
         public string? DescriptionAr { get; set; }
 
+        [Required]  // ✅ أضفنا Required
         [MaxLength(1000)]
         public string? DescriptionEn { get; set; }
 
-        [MaxLength(500)]
-        public string? ImageUrl { get; set; }
+        // ✅ حذفنا [MaxLength(500)]
+        public IFormFile? ImageFile { get; set; }
 
         public RecommendationSeason Season { get; set; } = RecommendationSeason.All;
         public ActivityType ActivityType { get; set; } = ActivityType.Cultural;

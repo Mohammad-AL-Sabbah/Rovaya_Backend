@@ -1,44 +1,50 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Rovaya.BLL.Service.Recommendations;
 using Rovaya.BLL.Service.TourismGuide;
 using Rovaya.DAL.DTO.Request.Auth;
 using Rovaya.DAL.DTO.Request.Recommendations;
 using Rovaya.DAL.DTO.Request.TourismGuid;
+using Rovaya.DAL.DTO.Response.Profile;
+using Rovaya.DAL.Models.Auth;
+using Rovaya.DAL.Repository.Profile;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Rovaya.PL.Controllers.Areas.Admin
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize ] // يضمن أن فقط المستخدمين المصرح لهم يمكنهم الوصول
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public class AdminController : ControllerBase
     {
         private readonly ITourismGuidService _tourismService;
         private readonly IRecommendationService _recommendationService;
+        private readonly IProfileRepository _profileRepository;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public AdminController(ITourismGuidService tourismService , IRecommendationService recommendationService)
+        public AdminController(
+            ITourismGuidService tourismService,
+            IRecommendationService recommendationService,
+            IProfileRepository profileRepository,
+            UserManager<ApplicationUser> userManager)
         {
             _tourismService = tourismService;
             _recommendationService = recommendationService;
+            _profileRepository = profileRepository;
+            _userManager = userManager;
         }
-
-        // ================= مساعدات معالجة الأخطاء (Error Handling Helpers) =================
 
         private IActionResult HandleModelState()
         {
-            var errors = ModelState.Values
-                .SelectMany(v => v.Errors)
-                .Select(e => e.ErrorMessage)
-                .ToList();
-
+            var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
             return BadRequest(new { success = false, message = "بيانات الطلب غير صالحة", errors });
         }
 
         private IActionResult HandleException(Exception ex, string customMessage = "حدث خطأ غير متوقع في الخادم")
         {
-            // ملاحظة: هنا يُفضل إضافة Logger لتسجيل الخطأ الحقيقي في ملفات النظام
-            // _logger.LogError(ex, customMessage);
-
             return StatusCode(500, new { success = false, message = customMessage, details = ex.Message });
         }
 
@@ -50,14 +56,10 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var createdCategory = await _tourismService.CreateCategoryAsync(request);
                 return Ok(new { success = true, message = "تم إنشاء التصنيف بنجاح", data = createdCategory });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في إنشاء التصنيف");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في إنشاء التصنيف"); }
         }
 
         [HttpPut("update-tourism-category/{id}")]
@@ -66,17 +68,11 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var success = await _tourismService.UpdateCategoryAsync(id, request);
-                if (!success)
-                    return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث التصنيف بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في تحديث التصنيف");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في تحديث التصنيف"); }
         }
 
         [HttpDelete("delete-tourism-category/{id}")]
@@ -85,15 +81,10 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var success = await _tourismService.DeleteCategoryAsync(id);
-                if (!success)
-                    return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف التصنيف بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في حذف التصنيف");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في حذف التصنيف"); }
         }
 
         [HttpGet("get-tourism-categories")]
@@ -104,10 +95,7 @@ namespace Rovaya.PL.Controllers.Areas.Admin
                 var categories = await _tourismService.GetAllCategoriesAsync(langCode);
                 return Ok(new { success = true, data = categories });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب التصنيفات");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب التصنيفات"); }
         }
 
         [HttpGet("get-tourism-category/{id}")]
@@ -116,18 +104,13 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var category = await _tourismService.GetCategoryByIdAsync(id, langCode);
-                if (category == null)
-                    return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
-
+                if (category == null) return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
                 return Ok(new { success = true, data = category });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب تفاصيل التصنيف");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب تفاصيل التصنيف"); }
         }
 
-        // ================= Cities Management =================
+        // ================= Cities & Places Management =================
 
         [HttpPost("create-city")]
         public async Task<IActionResult> CreateCity([FromForm] CreateTourismPlaceRequest request)
@@ -135,14 +118,10 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var createdCity = await _tourismService.CreatePlaceAsync(request);
                 return Ok(new { success = true, message = "تم إنشاء المدينة بنجاح", data = createdCity });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في إنشاء المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في إنشاء المدينة"); }
         }
 
         [HttpPut("update-city/{id}")]
@@ -151,18 +130,12 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 request.Id = id;
                 var success = await _tourismService.UpdatePlaceAsync(request);
-                if (!success)
-                    return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
-
+                if (!success) return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
                 return Ok(new { success = true, message = "تم تحديث المدينة بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في تحديث المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في تحديث المدينة"); }
         }
 
         [HttpDelete("delete-city/{id}")]
@@ -171,32 +144,21 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var success = await _tourismService.DeletePlaceAsync(id);
-                if (!success)
-                    return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
-
+                if (!success) return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
                 return Ok(new { success = true, message = "تم حذف المدينة بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في حذف المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في حذف المدينة"); }
         }
 
         [HttpGet("get-all-cities")]
-        public async Task<IActionResult> GetAllCities(
-            [FromQuery] string langCode = "ar",
-            [FromQuery] int? categoryId = null,
-            [FromQuery] string? searchName = null)
+        public async Task<IActionResult> GetAllCities([FromQuery] string langCode = "ar", [FromQuery] int? categoryId = null, [FromQuery] string? searchName = null)
         {
             try
             {
                 var cities = await _tourismService.GetAllCitiesAsync(langCode, categoryId, searchName);
                 return Ok(new { success = true, data = cities });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب قائمة المدن");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب قائمة المدن"); }
         }
 
         [HttpGet("get-city-details/{id}")]
@@ -205,18 +167,11 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var cityDetails = await _tourismService.GetCityDetailsAsync(id, langCode);
-                if (cityDetails == null)
-                    return NotFound(new { success = false, message = "تفاصيل المدينة غير موجودة." });
-
+                if (cityDetails == null) return NotFound(new { success = false, message = "تفاصيل المدينة غير موجودة." });
                 return Ok(new { success = true, data = cityDetails });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب تفاصيل المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب تفاصيل المدينة"); }
         }
-
-        // ================= Tourist Places Management =================
 
         [HttpPost("create-tourist-place")]
         public async Task<IActionResult> CreateTouristPlace([FromForm] CreateTourismPlaceRequest request)
@@ -224,14 +179,10 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var createdPlace = await _tourismService.CreatePlaceAsync(request);
                 return Ok(new { success = true, message = "تم إنشاء المكان السياحي بنجاح", data = createdPlace });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في إنشاء المكان السياحي");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في إنشاء المكان السياحي"); }
         }
 
         [HttpPut("update-tourist-place")]
@@ -240,17 +191,11 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var success = await _tourismService.UpdatePlaceAsync(request);
-                if (!success)
-                    return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث المكان السياحي بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في تحديث المكان السياحي");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في تحديث المكان السياحي"); }
         }
 
         [HttpDelete("delete-tourist-place/{id}")]
@@ -259,38 +204,22 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var success = await _tourismService.DeletePlaceAsync(id);
-                if (!success)
-                    return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف المكان السياحي بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في حذف المكان السياحي");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في حذف المكان السياحي"); }
         }
 
         [HttpGet("get-all-tourist-places")]
-        public async Task<IActionResult> GetAllTouristPlaces(
-            [FromQuery] string langCode = "ar",
-            [FromQuery] int? categoryId = null,
-            [FromQuery] string? searchName = null)
+        public async Task<IActionResult> GetAllTouristPlaces([FromQuery] string langCode = "ar", [FromQuery] int? categoryId = null, [FromQuery] string? searchName = null)
         {
             try
             {
-                var searchRequest = new TourismPlaceSearchRequest
-                {
-                    LangCode = langCode,
-                    CategoryId = categoryId,
-                    SearchName = searchName
-                };
+                var searchRequest = new TourismPlaceSearchRequest { LangCode = langCode, CategoryId = categoryId, SearchName = searchName };
                 var places = await _tourismService.GetAllPlacesAsync(searchRequest);
                 return Ok(new { success = true, data = places });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب الأماكن السياحية");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب الأماكن السياحية"); }
         }
 
         [HttpGet("get-tourist-place/{id}")]
@@ -299,53 +228,39 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var place = await _tourismService.GetPlaceByIdAsync(id, langCode);
-                if (place == null)
-                    return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
-
+                if (place == null) return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
                 return Ok(new { success = true, data = place });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب تفاصيل المكان السياحي");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب تفاصيل المكان السياحي"); }
         }
 
         // ================= City Sections Management =================
 
         [HttpPost("create-city-section")]
-        public async Task<IActionResult> CreateCitySection([FromBody] CreateCitySectionRequest request)
+        public async Task<IActionResult> CreateCitySection([FromForm] CreateCitySectionRequest request)
         {
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var created = await _tourismService.CreateSectionAsync(request);
                 return Ok(new { success = true, message = "تم إنشاء قسم المدينة بنجاح", data = created });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في إنشاء قسم المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في إنشاء قسم المدينة"); }
         }
 
+
         [HttpPut("update-city-section/{id}")]
-        public async Task<IActionResult> UpdateCitySection(int id, [FromBody] UpdateCitySectionRequest request)
+        public async Task<IActionResult> UpdateCitySection(int id, [FromForm] UpdateCitySectionRequest request)
         {
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 request.Id = id;
                 var success = await _tourismService.UpdateSectionAsync(request);
-                if (!success)
-                    return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث قسم المدينة بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في تحديث قسم المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في تحديث قسم المدينة"); }
         }
 
         [HttpDelete("delete-city-section/{id}")]
@@ -354,15 +269,10 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var success = await _tourismService.DeleteSectionAsync(id);
-                if (!success)
-                    return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
-
+                if (!success) return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف قسم المدينة بنجاح." });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في حذف قسم المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في حذف قسم المدينة"); }
         }
 
         [HttpGet("get-city-sections/{cityId}")]
@@ -373,10 +283,7 @@ namespace Rovaya.PL.Controllers.Areas.Admin
                 var sections = await _tourismService.GetSectionsByCityIdAsync(cityId);
                 return Ok(new { success = true, data = sections });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب أقسام المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب أقسام المدينة"); }
         }
 
         [HttpGet("get-city-section/{id}")]
@@ -385,55 +292,38 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 var section = await _tourismService.GetSectionByIdAsync(id);
-                if (section == null)
-                    return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
-
+                if (section == null) return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
                 return Ok(new { success = true, data = section });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب تفاصيل قسم المدينة");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب تفاصيل قسم المدينة"); }
         }
-
-
 
         // ================= Recommendations Management =================
 
         [HttpPost("create-recommendation")]
-        public async Task<IActionResult> CreateRecommendation([FromBody] CreateRecommendationRequest request)
+        public async Task<IActionResult> CreateRecommendation([FromForm] CreateRecommendationRequest request)
         {
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var result = await _recommendationService.CreateRecommendationAsync(User, request);
                 if (!result.Success) return BadRequest(result);
-
                 return Ok(new { success = true, message = result.Message, data = result });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في إنشاء التوصية");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في إنشاء التوصية"); }
         }
 
         [HttpPut("update-recommendation")]
-        public async Task<IActionResult> UpdateRecommendation([FromBody] UpdateRecommendationRequest request)
+        public async Task<IActionResult> UpdateRecommendation([FromForm] UpdateRecommendationRequest request)
         {
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-
                 var result = await _recommendationService.UpdateRecommendationAsync(User, request);
                 if (!result.Success) return BadRequest(result);
-
                 return Ok(new { success = true, message = result.Message });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في تحديث التوصية");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في تحديث التوصية"); }
         }
 
         [HttpDelete("delete-recommendation/{id}")]
@@ -443,13 +333,9 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             {
                 var result = await _recommendationService.DeleteRecommendationAsync(User, id);
                 if (!result.Success) return BadRequest(result);
-
                 return Ok(new { success = true, message = result.Message });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في حذف التوصية");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في حذف التوصية"); }
         }
 
         [HttpGet("get-all-recommendations")]
@@ -459,13 +345,9 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             {
                 var result = await _recommendationService.GetAllRecommendationsAsync(User, filter);
                 if (!result.Success) return BadRequest(result);
-
                 return Ok(new { success = true, data = result });
             }
-            catch (Exception ex)
-            {
-                return HandleException(ex, "فشل في جلب التوصيات");
-            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب التوصيات"); }
         }
 
         [HttpGet("get-recommendation/{id}")]
@@ -475,16 +357,48 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             {
                 var result = await _recommendationService.GetRecommendationByIdAsync(User, id);
                 if (!result.Success) return BadRequest(result);
-
                 return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex) { return HandleException(ex, "فشل في جلب تفاصيل التوصية"); }
+        }
+
+        // ================= Employees Management =================
+
+        [HttpGet("get-all-employees")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetAllEmployees()
+        {
+            try
+            {
+                var allUsers = await _profileRepository.GetAllUsersAsync();
+                var employees = new List<UserSummaryResponse>();
+
+                foreach (var user in allUsers)
+                {
+                    var roles = await _userManager.GetRolesAsync(user);
+                    if (roles.Contains("Admin") || roles.Contains("SuperAdmin"))
+                    {
+                        employees.Add(new UserSummaryResponse
+                        {
+                            Id = user.Id,
+                            FirstName = user.FirstName,
+                            LastName = user.LastName,
+                            Email = user.Email,
+                            PhoneNumber = user.PhoneNumber,
+                            Country = user.Country,
+                            CreatedAt = user.CreatedAt,
+                            Status = user.Status,
+                            Roles = roles.ToList()
+                        });
+                    }
+                }
+
+                return Ok(new { success = true, message = $"تم جلب {employees.Count} موظف وإداري بنجاح", data = employees, totalCount = employees.Count });
             }
             catch (Exception ex)
             {
-                return HandleException(ex, "فشل في جلب تفاصيل التوصية");
+                return StatusCode(500, new { success = false, message = $"حدث خطأ في الخادم: {ex.Message}" });
             }
         }
-
-
-
     }
 }

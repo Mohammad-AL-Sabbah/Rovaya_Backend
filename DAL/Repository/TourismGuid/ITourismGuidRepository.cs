@@ -28,6 +28,7 @@ namespace Rovaya.DAL.Repository.TourismGuid
         // Cities
         Task<IEnumerable<TourismGuidePlace>> GetAllCitiesAsync(string? langCode, int? categoryId, string? searchName);
         Task<IEnumerable<TourismGuidePlace>> GetPlacesByParentIdAsync(int parentId, string? langCode);
+        Task<List<TourismGuideCategory>> GetCategoriesByIdsAsync(IEnumerable<int> ids);
 
     }
 }

@@ -344,6 +344,57 @@ namespace Rovaya.PL.Controllers.Areas.Identity
 
 
 
+        [HttpPost("delete-user-account")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> DeleteUserAccount([FromBody] string targetUserId)
+        {
+            var result = await _authenticationService.DeleteUserAccountByAdminAsync(User, targetUserId);
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+
+
+
+
+
+
+
+
+
+        // ... (أبقِ على جميع الـ Using والـ Constructor كما هي) ...
+
+        [HttpPost("upload-profile-image")]
+        [Authorize]
+        public async Task<IActionResult> UploadProfileImage([FromForm] IFormFile file)
+        {
+            var result = await _profileService.UploadProfileImageAsync(User, file);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+            return Ok(result);
+        }
+
+
+
+        [HttpPost("change-role")]
+        [Authorize(Roles = "SuperAdmin")] 
+        public async Task<IActionResult> ChangeUserRole([FromBody] ChangeRoleRequest request)
+        {
+            var result = await _authenticationService.ChangeUserRoleAsync(User, request);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+
+
+
 
     }
-}
+    }

@@ -1,10 +1,17 @@
-﻿namespace Rovaya.DAL.DTO.Response.TourismGuid
+﻿using System.Collections.Generic;
+
+namespace Rovaya.DAL.DTO.Response.TourismGuid
 {
     public class TourismPlaceResponse
     {
         public int Id { get; set; }
-        public int CategoryId { get; set; }
+
+        // ✅ قوائم لدعم التصنيفات المتعددة
+        public List<int> CategoryIds { get; set; } = new List<int>();
+        public List<string> CategoryNames { get; set; } = new List<string>();
+
         public int? ParentPlaceId { get; set; }
+        public string? ParentPlaceName { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string LanguageCode { get; set; } = string.Empty;

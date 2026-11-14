@@ -12,6 +12,7 @@ namespace Rovaya.DAL.Models.TourismGuide
         public ICollection<TourismGuideCategoryTranslation> TourismGuideTranslations { get; set; }
             = new List<TourismGuideCategoryTranslation>();
 
+        // ✅ هذا الجزء موجود وهو ما يكمل علاقة Many-to-Many
         public ICollection<TourismGuidePlace> Places { get; set; }
             = new List<TourismGuidePlace>();
     }

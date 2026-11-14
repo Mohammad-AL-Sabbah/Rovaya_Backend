@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Rovaya.DAL.DTO.Request.Recommendations;
 using Rovaya.DAL.DTO.Response;
 using Rovaya.DAL.DTO.Response.Recommendations;
@@ -14,11 +17,19 @@ namespace Rovaya.BLL.Service.Recommendations
     {
         private readonly IRecommendationRepository _recommendationRepository;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IConfiguration _configuration;
 
-        public RecommendationService(IRecommendationRepository recommendationRepository, UserManager<ApplicationUser> userManager)
+        public RecommendationService(
+            IRecommendationRepository recommendationRepository,
+            UserManager<ApplicationUser> userManager,
+            IWebHostEnvironment webHostEnvironment,
+            IConfiguration configuration)
         {
             _recommendationRepository = recommendationRepository;
             _userManager = userManager;
+            _webHostEnvironment = webHostEnvironment;
+            _configuration = configuration;
         }
 
         private async Task<ApplicationUser?> GetCurrentUserAsync(ClaimsPrincipal user)
@@ -37,6 +48,70 @@ namespace Rovaya.BLL.Service.Recommendations
             return roles.Contains("Admin") || roles.Contains("SuperAdmin");
         }
 
+        // ✅ دالة مساعدة لحفظ الصورة وإرجاع اسم الملف فقط
+        private async Task<string?> HandleImageUploadAsync(IFormFile? file, string? oldFileName = null)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return oldFileName;
+                }
+
+                if (!string.IsNullOrEmpty(oldFileName))
+                {
+                    var oldFilePath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "recommendations", oldFileName);
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        System.IO.File.Delete(oldFilePath);
+                    }
+                }
+
+                var uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "recommendations");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var uniqueFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(fileStream);
+                }
+
+                return uniqueFileName;
+            }
+            catch (Exception ex)
+            {
+                // ✅ طباعة الخطأ للـ Console
+                Console.WriteLine($"❌ Error uploading file: {ex.Message}");
+                Console.WriteLine($"❌ Stack Trace: {ex.StackTrace}");
+                throw;
+            }
+        }
+        // ✅ دالة مساعدة لتوليد الرابط الكامل للصورة
+        private string GetFullImageUrl(string? fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return string.Empty;
+
+            // ✅ إذا كان الرابط كاملاً، استخدمه كما هو (للتوافق مع البيانات القديمة)
+            if (fileName.StartsWith("http://") || fileName.StartsWith("https://"))
+            {
+                return fileName;
+            }
+
+            // إذا كان اسم ملف فقط، أضف الـ AppUrl
+            var appUrl = _configuration["AppUrl"];
+            if (!appUrl.StartsWith("http://") && !appUrl.StartsWith("https://"))
+            {
+                appUrl = "https://" + appUrl;
+            }
+
+            return $"{appUrl}/uploads/recommendations/{fileName}";
+        }
+
         private RecommendationResponse MapToFullResponse(RovayaRecommendation rec)
         {
             return new RecommendationResponse
@@ -48,7 +123,7 @@ namespace Rovaya.BLL.Service.Recommendations
                 TitleEn = rec.TitleEn,
                 DescriptionAr = rec.DescriptionAr,
                 DescriptionEn = rec.DescriptionEn,
-                ImageUrl = rec.ImageUrl,
+                ImageUrl = GetFullImageUrl(rec.ImageUrl), // ✅ إرجاع الرابط الكامل
                 Season = rec.Season,
                 ActivityType = rec.ActivityType,
                 Occasion = rec.Occasion,
@@ -71,7 +146,7 @@ namespace Rovaya.BLL.Service.Recommendations
                 TitleEn = rec.TitleEn,
                 DescriptionAr = rec.DescriptionAr,
                 DescriptionEn = rec.DescriptionEn,
-                ImageUrl = rec.ImageUrl,
+                ImageUrl = GetFullImageUrl(rec.ImageUrl), // ✅ إرجاع الرابط الكامل
                 Season = rec.Season.ToString(),
                 ActivityType = rec.ActivityType.ToString(),
                 Occasion = rec.Occasion,
@@ -96,13 +171,16 @@ namespace Rovaya.BLL.Service.Recommendations
 
                 var currentUser = await GetCurrentUserAsync(adminUser);
 
+                // ✅ حفظ الصورة والحصول على اسم الملف
+                var fileName = await HandleImageUploadAsync(request.ImageFile);
+
                 var recommendation = new RovayaRecommendation
                 {
                     TitleAr = request.TitleAr,
                     TitleEn = request.TitleEn,
                     DescriptionAr = request.DescriptionAr,
                     DescriptionEn = request.DescriptionEn,
-                    ImageUrl = request.ImageUrl,
+                    ImageUrl = fileName, // ✅ حفظ اسم الملف فقط في قاعدة البيانات
                     Season = request.Season,
                     ActivityType = request.ActivityType,
                     Occasion = request.Occasion,
@@ -140,11 +218,14 @@ namespace Rovaya.BLL.Service.Recommendations
                     return new RecommendationResponse { Success = false, Message = "التوصية غير موجودة" };
                 }
 
+                // ✅ معالجة الصورة الجديدة (ستحذف القديمة تلقائياً إذا وجدت)
+                var fileName = await HandleImageUploadAsync(request.ImageFile, recommendation.ImageUrl);
+
                 recommendation.TitleAr = request.TitleAr;
                 recommendation.TitleEn = request.TitleEn;
                 recommendation.DescriptionAr = request.DescriptionAr;
                 recommendation.DescriptionEn = request.DescriptionEn;
-                recommendation.ImageUrl = request.ImageUrl;
+                recommendation.ImageUrl = fileName; // ✅ تحديث اسم الملف
                 recommendation.Season = request.Season;
                 recommendation.ActivityType = request.ActivityType;
                 recommendation.Occasion = request.Occasion;
@@ -178,6 +259,16 @@ namespace Rovaya.BLL.Service.Recommendations
                 if (recommendation == null)
                 {
                     return new BaseResponse { Success = false, Message = "التوصية غير موجودة" };
+                }
+
+                // ✅ حذف الصورة الفعلية من السيرفر عند حذف التوصية
+                if (!string.IsNullOrEmpty(recommendation.ImageUrl))
+                {
+                    var filePath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "recommendations", recommendation.ImageUrl);
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        System.IO.File.Delete(filePath);
+                    }
                 }
 
                 await _recommendationRepository.DeleteAsync(id);

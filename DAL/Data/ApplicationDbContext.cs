@@ -16,7 +16,7 @@ namespace Rovaya.DAL.Data
         public DbSet<TourismGuidePlaceTranslation> TourismGuidePlaceTranslations { get; set; }
         public DbSet<Rovaya.DAL.Models.AuditLog> AuditLogs { get; set; }
 
-
+        public DbSet<UserTrip> UserTrips { get; set; }
         public DbSet<Rovaya.DAL.Models.Recommendations.RovayaRecommendation> RovayaRecommendations { get; set; }
 
 

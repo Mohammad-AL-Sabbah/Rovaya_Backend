@@ -427,6 +427,10 @@ namespace Rovaya.DAL.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ContentEn")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -437,6 +441,10 @@ namespace Rovaya.DAL.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TitleEn")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -506,9 +514,6 @@ namespace Rovaya.DAL.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -525,8 +530,6 @@ namespace Rovaya.DAL.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CategoryId");
 
                     b.HasIndex("ParentPlaceId");
 
@@ -560,6 +563,62 @@ namespace Rovaya.DAL.Migrations
                     b.HasIndex("TourismGuidePlaceId");
 
                     b.ToTable("TourismGuidePlaceTranslations");
+                });
+
+            modelBuilder.Entity("TourismGuideCategoryTourismGuidePlace", b =>
+                {
+                    b.Property<int>("CategoriesId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PlacesId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("CategoriesId", "PlacesId");
+
+                    b.HasIndex("PlacesId");
+
+                    b.ToTable("TourismGuideCategoryTourismGuidePlace");
+                });
+
+            modelBuilder.Entity("UserTrip", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsSaved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ItineraryJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StartDate")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalBudget")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("TripTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserTrips");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -674,18 +733,10 @@ namespace Rovaya.DAL.Migrations
 
             modelBuilder.Entity("Rovaya.DAL.Models.TourismGuide.TourismGuidePlace", b =>
                 {
-                    b.HasOne("Rovaya.DAL.Models.TourismGuide.TourismGuideCategory", "Category")
-                        .WithMany("Places")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Rovaya.DAL.Models.TourismGuide.TourismGuidePlace", "ParentPlace")
                         .WithMany("SubPlaces")
                         .HasForeignKey("ParentPlaceId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Category");
 
                     b.Navigation("ParentPlace");
                 });
@@ -701,6 +752,21 @@ namespace Rovaya.DAL.Migrations
                     b.Navigation("TourismGuidePlace");
                 });
 
+            modelBuilder.Entity("TourismGuideCategoryTourismGuidePlace", b =>
+                {
+                    b.HasOne("Rovaya.DAL.Models.TourismGuide.TourismGuideCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Rovaya.DAL.Models.TourismGuide.TourismGuidePlace", null)
+                        .WithMany()
+                        .HasForeignKey("PlacesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Rovaya.DAL.Models.Auth.ApplicationUser", b =>
                 {
                     b.Navigation("MedicalProfile");
@@ -708,8 +774,6 @@ namespace Rovaya.DAL.Migrations
 
             modelBuilder.Entity("Rovaya.DAL.Models.TourismGuide.TourismGuideCategory", b =>
                 {
-                    b.Navigation("Places");
-
                     b.Navigation("TourismGuideTranslations");
                 });
 

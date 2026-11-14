@@ -13,8 +13,8 @@ namespace Rovaya.BLL.Service.Email
             // إعداد بيانات السيرفر والحساب
             var smtpServer = "smtp.gmail.com"; 
             var port = 587;
-            var senderEmail = "mohmmadsabbah123@gmail.com"; // يجب أن يكون إيميل أوفيس/أوتلوك يطابق الحساب
-            var password = "biml slqe mcce ajgm"; // كلمة المرور الخاص بك أو App Password
+            var senderEmail = "rovayapalestine@gmail.com"; // يجب أن يكون إيميل أوفيس/أوتلوك يطابق الحساب
+            var password = "kaeg jaff fyph zrsh"; // كلمة المرور الخاص بك أو App Password
 
             using (var client = new SmtpClient(smtpServer, port))
             {

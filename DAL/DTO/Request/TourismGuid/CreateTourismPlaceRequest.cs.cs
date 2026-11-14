@@ -1,10 +1,14 @@
 ﻿using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Rovaya.DAL.DTO.Request.TourismGuid
 {
     public class CreateTourismPlaceRequest
     {
-        public int CategoryId { get; set; }
+        // ✅ تم التغيير من int إلى List<int> للسماح بعدة تصنيفات أو لا شيء
+        public List<int>? CategoryIds { get; set; }
+
         public int? ParentPlaceId { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
