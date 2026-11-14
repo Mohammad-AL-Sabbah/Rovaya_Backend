@@ -14,6 +14,8 @@ namespace Rovaya.DAL.DTO.Response.Recommendations
         public RecommendationSeason Season { get; set; }
         public ActivityType ActivityType { get; set; }
         public string? Occasion { get; set; }
+        // ✅ المناسبة بالإنجليزية
+        public string? OccasionEn { get; set; }
         public int? SuggestedPlaceId { get; set; }
         public string? SuggestedPlaceName { get; set; }
         public int DisplayOrder { get; set; }

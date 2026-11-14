@@ -30,15 +30,18 @@ namespace Rovaya.DAL.Models.Recommendations
         public RecommendationSeason Season { get; set; } = RecommendationSeason.All;
         public ActivityType ActivityType { get; set; } = ActivityType.Cultural;
 
+        // ✅ المناسبة بالعربية
         [MaxLength(200)]
-        public string? Occasion { get; set; } // مثال: "رمضان"، "عيد الفطر"
+        public string? Occasion { get; set; }
 
-        // ربط اختياري بمكان سياحي موجود
+        // ✅ المناسبة بالإنجليزية (حقل جديد)
+        [MaxLength(200)]
+        public string? OccasionEn { get; set; }
+
         [ForeignKey(nameof(SuggestedPlace))]
         public int? SuggestedPlaceId { get; set; }
         public TourismGuidePlace? SuggestedPlace { get; set; }
 
-        // ترتيب العرض (الأصغر = الأول)
         public int DisplayOrder { get; set; } = 0;
 
         public bool IsActive { get; set; } = true;

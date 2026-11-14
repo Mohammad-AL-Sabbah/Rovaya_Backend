@@ -17,22 +17,26 @@ namespace Rovaya.DAL.DTO.Request.Recommendations
         [MaxLength(200)]
         public string TitleEn { get; set; } = null!;
 
-        [Required]  // ✅ أضفنا Required
+        [Required]
         [MaxLength(1000)]
         public string? DescriptionAr { get; set; }
 
-        [Required]  // ✅ أضفنا Required
+        [Required]
         [MaxLength(1000)]
         public string? DescriptionEn { get; set; }
 
-        // ✅ حذفنا [MaxLength(500)]
         public IFormFile? ImageFile { get; set; }
 
         public RecommendationSeason Season { get; set; } = RecommendationSeason.All;
         public ActivityType ActivityType { get; set; } = ActivityType.Cultural;
 
+        // ✅ المناسبة بالعربية
         [MaxLength(200)]
         public string? Occasion { get; set; }
+
+        // ✅ المناسبة بالإنجليزية (حقل جديد)
+        [MaxLength(200)]
+        public string? OccasionEn { get; set; }
 
         public int? SuggestedPlaceId { get; set; }
 

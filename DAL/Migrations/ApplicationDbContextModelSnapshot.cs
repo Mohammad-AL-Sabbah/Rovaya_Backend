@@ -384,6 +384,10 @@ namespace Rovaya.DAL.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("OccasionEn")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("Season")
                         .HasColumnType("integer");
 

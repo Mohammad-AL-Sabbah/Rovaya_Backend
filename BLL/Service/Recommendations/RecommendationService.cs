@@ -48,7 +48,6 @@ namespace Rovaya.BLL.Service.Recommendations
             return roles.Contains("Admin") || roles.Contains("SuperAdmin");
         }
 
-        // ✅ دالة مساعدة لحفظ الصورة وإرجاع اسم الملف فقط
         private async Task<string?> HandleImageUploadAsync(IFormFile? file, string? oldFileName = null)
         {
             try
@@ -85,24 +84,20 @@ namespace Rovaya.BLL.Service.Recommendations
             }
             catch (Exception ex)
             {
-                // ✅ طباعة الخطأ للـ Console
                 Console.WriteLine($"❌ Error uploading file: {ex.Message}");
                 Console.WriteLine($"❌ Stack Trace: {ex.StackTrace}");
                 throw;
             }
         }
-        // ✅ دالة مساعدة لتوليد الرابط الكامل للصورة
+
         private string GetFullImageUrl(string? fileName)
         {
             if (string.IsNullOrEmpty(fileName)) return string.Empty;
-
-            // ✅ إذا كان الرابط كاملاً، استخدمه كما هو (للتوافق مع البيانات القديمة)
             if (fileName.StartsWith("http://") || fileName.StartsWith("https://"))
             {
                 return fileName;
             }
 
-            // إذا كان اسم ملف فقط، أضف الـ AppUrl
             var appUrl = _configuration["AppUrl"];
             if (!appUrl.StartsWith("http://") && !appUrl.StartsWith("https://"))
             {
@@ -123,10 +118,11 @@ namespace Rovaya.BLL.Service.Recommendations
                 TitleEn = rec.TitleEn,
                 DescriptionAr = rec.DescriptionAr,
                 DescriptionEn = rec.DescriptionEn,
-                ImageUrl = GetFullImageUrl(rec.ImageUrl), // ✅ إرجاع الرابط الكامل
+                ImageUrl = GetFullImageUrl(rec.ImageUrl),
                 Season = rec.Season,
                 ActivityType = rec.ActivityType,
                 Occasion = rec.Occasion,
+                OccasionEn = rec.OccasionEn, // ✅ إضافة المناسبة الإنجليزية
                 SuggestedPlaceId = rec.SuggestedPlaceId,
                 SuggestedPlaceName = rec.SuggestedPlace?.Translations?.FirstOrDefault(t => t.LanguageCode == "ar")?.Name,
                 DisplayOrder = rec.DisplayOrder,
@@ -146,10 +142,11 @@ namespace Rovaya.BLL.Service.Recommendations
                 TitleEn = rec.TitleEn,
                 DescriptionAr = rec.DescriptionAr,
                 DescriptionEn = rec.DescriptionEn,
-                ImageUrl = GetFullImageUrl(rec.ImageUrl), // ✅ إرجاع الرابط الكامل
+                ImageUrl = GetFullImageUrl(rec.ImageUrl),
                 Season = rec.Season.ToString(),
                 ActivityType = rec.ActivityType.ToString(),
                 Occasion = rec.Occasion,
+                OccasionEn = rec.OccasionEn, // ✅ إضافة المناسبة الإنجليزية
                 SuggestedPlaceId = rec.SuggestedPlaceId,
                 SuggestedPlaceName = rec.SuggestedPlace?.Translations?.FirstOrDefault(t => t.LanguageCode == "ar")?.Name,
                 DisplayOrder = rec.DisplayOrder,
@@ -170,8 +167,6 @@ namespace Rovaya.BLL.Service.Recommendations
                 }
 
                 var currentUser = await GetCurrentUserAsync(adminUser);
-
-                // ✅ حفظ الصورة والحصول على اسم الملف
                 var fileName = await HandleImageUploadAsync(request.ImageFile);
 
                 var recommendation = new RovayaRecommendation
@@ -180,10 +175,11 @@ namespace Rovaya.BLL.Service.Recommendations
                     TitleEn = request.TitleEn,
                     DescriptionAr = request.DescriptionAr,
                     DescriptionEn = request.DescriptionEn,
-                    ImageUrl = fileName, // ✅ حفظ اسم الملف فقط في قاعدة البيانات
+                    ImageUrl = fileName,
                     Season = request.Season,
                     ActivityType = request.ActivityType,
                     Occasion = request.Occasion,
+                    OccasionEn = request.OccasionEn, // ✅ حفظ المناسبة الإنجليزية
                     SuggestedPlaceId = request.SuggestedPlaceId,
                     DisplayOrder = request.DisplayOrder,
                     IsActive = request.IsActive,
@@ -218,17 +214,17 @@ namespace Rovaya.BLL.Service.Recommendations
                     return new RecommendationResponse { Success = false, Message = "التوصية غير موجودة" };
                 }
 
-                // ✅ معالجة الصورة الجديدة (ستحذف القديمة تلقائياً إذا وجدت)
                 var fileName = await HandleImageUploadAsync(request.ImageFile, recommendation.ImageUrl);
 
                 recommendation.TitleAr = request.TitleAr;
                 recommendation.TitleEn = request.TitleEn;
                 recommendation.DescriptionAr = request.DescriptionAr;
                 recommendation.DescriptionEn = request.DescriptionEn;
-                recommendation.ImageUrl = fileName; // ✅ تحديث اسم الملف
+                recommendation.ImageUrl = fileName;
                 recommendation.Season = request.Season;
                 recommendation.ActivityType = request.ActivityType;
                 recommendation.Occasion = request.Occasion;
+                recommendation.OccasionEn = request.OccasionEn; // ✅ تحديث المناسبة الإنجليزية
                 recommendation.SuggestedPlaceId = request.SuggestedPlaceId;
                 recommendation.DisplayOrder = request.DisplayOrder;
                 recommendation.IsActive = request.IsActive;
@@ -261,7 +257,6 @@ namespace Rovaya.BLL.Service.Recommendations
                     return new BaseResponse { Success = false, Message = "التوصية غير موجودة" };
                 }
 
-                // ✅ حذف الصورة الفعلية من السيرفر عند حذف التوصية
                 if (!string.IsNullOrEmpty(recommendation.ImageUrl))
                 {
                     var filePath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "recommendations", recommendation.ImageUrl);
