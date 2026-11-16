@@ -20,7 +20,11 @@ namespace Rovaya.PL.Controllers.Areas.Customer
         private readonly IRecommendationService _recommendationService;
         private readonly ITripPlannerService _tripPlannerService;
 
-        public CustomerController(ITourismGuidService tourismService, ITourismNewsService tourismNewsService , IRecommendationService recommendationService, ITripPlannerService tripPlannerService)
+        public CustomerController(
+            ITourismGuidService tourismService,
+            ITourismNewsService tourismNewsService,
+            IRecommendationService recommendationService,
+            ITripPlannerService tripPlannerService)
         {
             _tourismService = tourismService;
             _tourismNewsService = tourismNewsService;
@@ -83,12 +87,8 @@ namespace Rovaya.PL.Controllers.Areas.Customer
         }
 
         // ================= Tourism News =================
-        // ⚠️ IMPORTANT: Put specific routes BEFORE catch-all routes!
 
-        /// <summary>
-        /// جلب آخر أخبار السياحة من وزارة السياحة والآثار
-        /// </summary>
-        [HttpGet("tourism-news/latest")]  // ✅ مسار محدد
+        [HttpGet("tourism-news/latest")]
         public async Task<IActionResult> GetLatestNews([FromQuery] int count = 10)
         {
             var result = await _tourismNewsService.GetLatestNewsAsync(count);
@@ -99,10 +99,7 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(result);
         }
 
-        /// <summary>
-        /// جلب خبر محدد بالتفصيل
-        /// </summary>
-        [HttpGet("tourism-news/{id:int}")]  // ✅ أضفنا :int constraint
+        [HttpGet("tourism-news/{id:int}")]
         public async Task<IActionResult> GetNewsById(int id)
         {
             var news = await _tourismNewsService.GetNewsByIdAsync(id);
@@ -113,10 +110,7 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(new { success = true, data = news });
         }
 
-        /// <summary>
-        /// جلب صورة الخبر
-        /// </summary>
-        [HttpGet("tourism-news/media/{mediaId:int}")]  // ✅ أضفنا :int constraint
+        [HttpGet("tourism-news/media/{mediaId:int}")]
         public async Task<IActionResult> GetNewsImage(int mediaId)
         {
             var imageUrl = await _tourismNewsService.GetNewsImageUrlAsync(mediaId);
@@ -127,13 +121,8 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(new { success = true, imageUrl });
         }
 
+        // ================= Recommendations =================
 
-
-
-
-        /// <summary>
-        /// جلب جميع التوصيات النشطة
-        /// </summary>
         [HttpGet("recommendations")]
         public async Task<IActionResult> GetActiveRecommendations([FromQuery] RecommendationFilterRequest filter)
         {
@@ -142,9 +131,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(result);
         }
 
-        /// <summary>
-        /// جلب توصية محددة
-        /// </summary>
         [HttpGet("recommendations/{id}")]
         public async Task<IActionResult> GetRecommendationById(int id)
         {
@@ -153,9 +139,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(result);
         }
 
-        /// <summary>
-        /// جلب التوصيات حسب الموسم
-        /// </summary>
         [HttpGet("recommendations/season/{season}")]
         public async Task<IActionResult> GetRecommendationsBySeason(RecommendationSeason season, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
@@ -164,12 +147,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(result);
         }
 
-
-
-        /// <summary>
-        /// جلب التوصيات حسب نوع النشاط
-        /// </summary>
-        /// 
         [AllowAnonymous]
         [HttpGet("recommendations/activity/{activityType}")]
         public async Task<IActionResult> GetRecommendationsByActivity(ActivityType activityType, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
@@ -177,24 +154,17 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             var result = await _recommendationService.GetRecommendationsByActivityAsync(activityType, pageNumber, pageSize);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
-        } 
+        }
 
+        // ================= Trip Planner =================
 
-
-
-
-
-
-        // ✅ الدالة المساعدة التي كانت مفقودة
         private string GetUserId()
         {
             return User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown";
         }
 
-
-
         [HttpPost("generate")]
-        public async Task<IActionResult> GenerateTrip([FromBody] GenerateTripRequest request )
+        public async Task<IActionResult> GenerateTrip([FromBody] GenerateTripRequest request)
         {
             try
             {
@@ -207,15 +177,11 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             }
         }
 
-
-
-
-
         [HttpGet("place-details/{placeName}")]
         public async Task<IActionResult> GetPlaceDetails(
-    string placeName,
-    [FromQuery] string? placeNameEn = null,
-    [FromQuery] string? city = null)
+            string placeName,
+            [FromQuery] string? placeNameEn = null,
+            [FromQuery] string? city = null)
         {
             try
             {
@@ -227,8 +193,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
-
-
 
         [HttpPost("place-details")]
         public async Task<IActionResult> GetPlaceDetailsPost([FromBody] PlaceDetailsRequest request)
@@ -248,21 +212,12 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             }
         }
 
-
-
-
-
-
-
-
-
         [HttpGet("my-trips")]
         public async Task<IActionResult> GetMyTrips()
         {
             var trips = await _tripPlannerService.GetUserTripsAsync(GetUserId());
             return Ok(new { success = true, data = trips });
         }
-
 
         [HttpPost("modify-trip")]
         public async Task<IActionResult> ModifyTrip([FromBody] ModifyTripRequest request)
@@ -278,7 +233,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             }
         }
 
-        // جلب الخطة النشطة
         [HttpGet("active-trip")]
         public async Task<IActionResult> GetActiveTrip()
         {
@@ -292,7 +246,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(new { success = true, data = trip });
         }
 
-        // تفعيل خطة معينة
         [HttpPost("activate-trip/{tripId}")]
         public async Task<IActionResult> ActivateTrip(int tripId)
         {
@@ -306,7 +259,6 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(new { success = true, message = "تم تفعيل الخطة بنجاح" });
         }
 
-        // أرشفة خطة
         [HttpPost("archive-trip/{tripId}")]
         public async Task<IActionResult> ArchiveTrip(int tripId)
         {
@@ -320,12 +272,11 @@ namespace Rovaya.PL.Controllers.Areas.Customer
             return Ok(new { success = true, message = "تم أرشفة الخطة بنجاح" });
         }
 
-        // حذف خطة
         [HttpDelete("delete-trip/{tripId}")]
         public async Task<IActionResult> DeleteTrip(int tripId)
         {
             var result = await _tripPlannerService.DeleteTripAsync(GetUserId(), tripId);
-            
+
             if (!result)
             {
                 return BadRequest(new { success = false, message = "فشل في حذف الخطة" });
@@ -333,8 +284,5 @@ namespace Rovaya.PL.Controllers.Areas.Customer
 
             return Ok(new { success = true, message = "تم حذف الخطة بنجاح" });
         }
-
-
-
     }
 }

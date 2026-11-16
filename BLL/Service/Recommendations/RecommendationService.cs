@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Rovaya.BLL.Service.Audit; // ✅ 1. إضافة مكتبة التدقيق
 using Rovaya.DAL.DTO.Request.Recommendations;
 using Rovaya.DAL.DTO.Response;
 using Rovaya.DAL.DTO.Response.Recommendations;
@@ -19,17 +20,20 @@ namespace Rovaya.BLL.Service.Recommendations
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IConfiguration _configuration;
+        private readonly IAuditLogService _auditLogService; // ✅ 2. تعريف متغير خدمة التدقيق
 
         public RecommendationService(
             IRecommendationRepository recommendationRepository,
             UserManager<ApplicationUser> userManager,
             IWebHostEnvironment webHostEnvironment,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAuditLogService auditLogService) // ✅ 3. حقن الخدمة في الـ Constructor
         {
             _recommendationRepository = recommendationRepository;
             _userManager = userManager;
             _webHostEnvironment = webHostEnvironment;
             _configuration = configuration;
+            _auditLogService = auditLogService;
         }
 
         private async Task<ApplicationUser?> GetCurrentUserAsync(ClaimsPrincipal user)
@@ -122,7 +126,7 @@ namespace Rovaya.BLL.Service.Recommendations
                 Season = rec.Season,
                 ActivityType = rec.ActivityType,
                 Occasion = rec.Occasion,
-                OccasionEn = rec.OccasionEn, // ✅ إضافة المناسبة الإنجليزية
+                OccasionEn = rec.OccasionEn,
                 SuggestedPlaceId = rec.SuggestedPlaceId,
                 SuggestedPlaceName = rec.SuggestedPlace?.Translations?.FirstOrDefault(t => t.LanguageCode == "ar")?.Name,
                 DisplayOrder = rec.DisplayOrder,
@@ -146,7 +150,7 @@ namespace Rovaya.BLL.Service.Recommendations
                 Season = rec.Season.ToString(),
                 ActivityType = rec.ActivityType.ToString(),
                 Occasion = rec.Occasion,
-                OccasionEn = rec.OccasionEn, // ✅ إضافة المناسبة الإنجليزية
+                OccasionEn = rec.OccasionEn,
                 SuggestedPlaceId = rec.SuggestedPlaceId,
                 SuggestedPlaceName = rec.SuggestedPlace?.Translations?.FirstOrDefault(t => t.LanguageCode == "ar")?.Name,
                 DisplayOrder = rec.DisplayOrder,
@@ -179,7 +183,7 @@ namespace Rovaya.BLL.Service.Recommendations
                     Season = request.Season,
                     ActivityType = request.ActivityType,
                     Occasion = request.Occasion,
-                    OccasionEn = request.OccasionEn, // ✅ حفظ المناسبة الإنجليزية
+                    OccasionEn = request.OccasionEn,
                     SuggestedPlaceId = request.SuggestedPlaceId,
                     DisplayOrder = request.DisplayOrder,
                     IsActive = request.IsActive,
@@ -190,6 +194,16 @@ namespace Rovaya.BLL.Service.Recommendations
                 var created = await _recommendationRepository.CreateAsync(recommendation);
                 var response = MapToFullResponse(created);
                 response.Message = "تم إنشاء التوصية بنجاح";
+
+                // ✅ 4. تسجيل عملية الإنشاء في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    user: adminUser,
+                    action: "CreateRecommendation",
+                    targetUserId: null,
+                    targetUserName: $"توصية رقم {created.Id}",
+                    details: $"تم إنشاء توصية جديدة بعنوان: {created.TitleAr} (الموسم: {created.Season}, النشاط: {created.ActivityType})",
+                    reason: "إضافة محتوى جديد للمنصة"
+                );
 
                 return response;
             }
@@ -224,7 +238,7 @@ namespace Rovaya.BLL.Service.Recommendations
                 recommendation.Season = request.Season;
                 recommendation.ActivityType = request.ActivityType;
                 recommendation.Occasion = request.Occasion;
-                recommendation.OccasionEn = request.OccasionEn; // ✅ تحديث المناسبة الإنجليزية
+                recommendation.OccasionEn = request.OccasionEn;
                 recommendation.SuggestedPlaceId = request.SuggestedPlaceId;
                 recommendation.DisplayOrder = request.DisplayOrder;
                 recommendation.IsActive = request.IsActive;
@@ -233,6 +247,16 @@ namespace Rovaya.BLL.Service.Recommendations
                 var updated = await _recommendationRepository.UpdateAsync(recommendation);
                 var response = MapToFullResponse(updated);
                 response.Message = "تم تحديث التوصية بنجاح";
+
+                // ✅ 5. تسجيل عملية التعديل في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    user: adminUser,
+                    action: "UpdateRecommendation",
+                    targetUserId: null,
+                    targetUserName: $"توصية رقم {updated.Id}",
+                    details: $"تم تحديث بيانات التوصية: {updated.TitleAr}",
+                    reason: "تعديل محتوى من لوحة التحكم"
+                );
 
                 return response;
             }
@@ -257,6 +281,10 @@ namespace Rovaya.BLL.Service.Recommendations
                     return new BaseResponse { Success = false, Message = "التوصية غير موجودة" };
                 }
 
+                // ✅ حفظ العنوان قبل الحذف لاستخدامه في سجل التدقيق
+                var titleToDelete = recommendation.TitleAr;
+                var recId = recommendation.Id;
+
                 if (!string.IsNullOrEmpty(recommendation.ImageUrl))
                 {
                     var filePath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "recommendations", recommendation.ImageUrl);
@@ -267,6 +295,17 @@ namespace Rovaya.BLL.Service.Recommendations
                 }
 
                 await _recommendationRepository.DeleteAsync(id);
+
+                // ✅ 6. تسجيل عملية الحذف في الـ Audit Log
+                await _auditLogService.LogActionAsync(
+                    user: adminUser,
+                    action: "DeleteRecommendation",
+                    targetUserId: null,
+                    targetUserName: $"توصية رقم {recId}",
+                    details: $"تم حذف التوصية نهائياً: {titleToDelete}",
+                    reason: "حذف محتوى من لوحة التحكم"
+                );
+
                 return new BaseResponse { Success = true, Message = "تم حذف التوصية بنجاح" };
             }
             catch (Exception ex)

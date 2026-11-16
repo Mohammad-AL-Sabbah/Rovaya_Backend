@@ -56,7 +56,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var createdCategory = await _tourismService.CreateCategoryAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var createdCategory = await _tourismService.CreateCategoryAsync(User, request);
                 return Ok(new { success = true, message = "تم إنشاء التصنيف بنجاح", data = createdCategory });
             }
             catch (Exception ex) { return HandleException(ex, "فشل في إنشاء التصنيف"); }
@@ -68,7 +69,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var success = await _tourismService.UpdateCategoryAsync(id, request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.UpdateCategoryAsync(User, id, request);
                 if (!success) return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث التصنيف بنجاح." });
             }
@@ -80,7 +82,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
         {
             try
             {
-                var success = await _tourismService.DeleteCategoryAsync(id);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.DeleteCategoryAsync(User, id);
                 if (!success) return NotFound(new { success = false, message = "التصنيف المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف التصنيف بنجاح." });
             }
@@ -118,7 +121,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var createdCity = await _tourismService.CreatePlaceAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var createdCity = await _tourismService.CreatePlaceAsync(User, request);
                 return Ok(new { success = true, message = "تم إنشاء المدينة بنجاح", data = createdCity });
             }
             catch (Exception ex) { return HandleException(ex, "فشل في إنشاء المدينة"); }
@@ -131,7 +135,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             {
                 if (!ModelState.IsValid) return HandleModelState();
                 request.Id = id;
-                var success = await _tourismService.UpdatePlaceAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.UpdatePlaceAsync(User, request);
                 if (!success) return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
                 return Ok(new { success = true, message = "تم تحديث المدينة بنجاح." });
             }
@@ -143,7 +148,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
         {
             try
             {
-                var success = await _tourismService.DeletePlaceAsync(id);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.DeletePlaceAsync(User, id);
                 if (!success) return NotFound(new { success = false, message = "المدينة المطلوبة غير موجودة." });
                 return Ok(new { success = true, message = "تم حذف المدينة بنجاح." });
             }
@@ -179,7 +185,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var createdPlace = await _tourismService.CreatePlaceAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var createdPlace = await _tourismService.CreatePlaceAsync(User, request);
                 return Ok(new { success = true, message = "تم إنشاء المكان السياحي بنجاح", data = createdPlace });
             }
             catch (Exception ex) { return HandleException(ex, "فشل في إنشاء المكان السياحي"); }
@@ -191,7 +198,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var success = await _tourismService.UpdatePlaceAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.UpdatePlaceAsync(User, request);
                 if (!success) return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث المكان السياحي بنجاح." });
             }
@@ -203,7 +211,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
         {
             try
             {
-                var success = await _tourismService.DeletePlaceAsync(id);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.DeletePlaceAsync(User, id);
                 if (!success) return NotFound(new { success = false, message = "المكان السياحي المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف المكان السياحي بنجاح." });
             }
@@ -242,12 +251,12 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             try
             {
                 if (!ModelState.IsValid) return HandleModelState();
-                var created = await _tourismService.CreateSectionAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var created = await _tourismService.CreateSectionAsync(User, request);
                 return Ok(new { success = true, message = "تم إنشاء قسم المدينة بنجاح", data = created });
             }
             catch (Exception ex) { return HandleException(ex, "فشل في إنشاء قسم المدينة"); }
         }
-
 
         [HttpPut("update-city-section/{id}")]
         public async Task<IActionResult> UpdateCitySection(int id, [FromForm] UpdateCitySectionRequest request)
@@ -256,7 +265,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
             {
                 if (!ModelState.IsValid) return HandleModelState();
                 request.Id = id;
-                var success = await _tourismService.UpdateSectionAsync(request);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.UpdateSectionAsync(User, request);
                 if (!success) return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم تحديث قسم المدينة بنجاح." });
             }
@@ -268,7 +278,8 @@ namespace Rovaya.PL.Controllers.Areas.Admin
         {
             try
             {
-                var success = await _tourismService.DeleteSectionAsync(id);
+                // ✅ تم إضافة User كمعامل أول للتدقيق
+                var success = await _tourismService.DeleteSectionAsync(User, id);
                 if (!success) return NotFound(new { success = false, message = "قسم المدينة المطلوب غير موجود." });
                 return Ok(new { success = true, message = "تم حذف قسم المدينة بنجاح." });
             }

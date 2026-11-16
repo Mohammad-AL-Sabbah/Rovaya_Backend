@@ -5,10 +5,12 @@ using Rovaya.BLL.Service.Email;
 using Rovaya.BLL.Service.External;
 using Rovaya.BLL.Service.Profile;
 using Rovaya.BLL.Service.Recommendations;
+using Rovaya.BLL.Service.SupportTickets;
 using Rovaya.BLL.Service.TourismGuide;
 using Rovaya.DAL.Repository.Audit;
 using Rovaya.DAL.Repository.Profile;
 using Rovaya.DAL.Repository.Recommendations;
+using Rovaya.DAL.Repository.Support;
 using Rovaya.DAL.Repository.TourismGuid;
 using Rovaya.DAL.Utils;
 
@@ -66,7 +68,12 @@ namespace Rovaya.PL
                 client.Timeout = TimeSpan.FromMinutes(2);
             });
 
+            //Support Ticket Services
+            // DAL Repository
+           Services.AddScoped<ISupportTicketRepository,SupportTicketRepository>();
 
+            // BLL Service
+           Services.AddScoped<ISupportTicketService, SupportTicketService>();
 
 
         }

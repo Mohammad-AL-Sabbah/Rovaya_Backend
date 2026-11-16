@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Rovaya.DAL.Models.Auth;
 using Rovaya.DAL.Models.Identity;
+using Rovaya.DAL.Models.Support;
 using Rovaya.DAL.Models.TourismGuide;
 
 namespace Rovaya.DAL.Data
@@ -15,7 +16,7 @@ namespace Rovaya.DAL.Data
         public DbSet<TourismGuidePlace> TourismGuidePlaces { get; set; }
         public DbSet<TourismGuidePlaceTranslation> TourismGuidePlaceTranslations { get; set; }
         public DbSet<Rovaya.DAL.Models.AuditLog> AuditLogs { get; set; }
-
+        public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<UserTrip> UserTrips { get; set; }
         public DbSet<Rovaya.DAL.Models.Recommendations.RovayaRecommendation> RovayaRecommendations { get; set; }
 

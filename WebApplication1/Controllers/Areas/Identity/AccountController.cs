@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.RateLimiting;
 using Rovaya.BLL.Service.Audit;
 using Rovaya.BLL.Service.Auth;
 using Rovaya.BLL.Service.Profile;
+using Rovaya.BLL.Service.SupportTickets;
 using Rovaya.DAL.DTO.Request.Auth;
 using Rovaya.DAL.DTO.Request.Profile;
+using Rovaya.DAL.DTO.Request.Support;
 using Rovaya.DAL.DTO.Response.Auth;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
@@ -20,12 +22,16 @@ namespace Rovaya.PL.Controllers.Areas.Identity
         private readonly IAuthenticationService _authenticationService;
         private readonly IProfileService _profileService;
         private readonly IAuditLogService _auditLogService;
+        private readonly ISupportTicketService _supportTicketService;
 
-        public AccountController(IAuthenticationService authenticationService,IProfileService  profileService,IAuditLogService  auditLogService)
+        public AccountController(IAuthenticationService authenticationService,IProfileService  profileService,IAuditLogService  auditLogService
+            ,ISupportTicketService supportTicketService
+            )
         {
             _authenticationService = authenticationService;
             _profileService = profileService;
             _auditLogService = auditLogService;
+            _supportTicketService = supportTicketService;
         }
 
         [HttpPost("register")]
@@ -391,6 +397,61 @@ namespace Rovaya.PL.Controllers.Areas.Identity
 
             return Ok(result);
         }
+
+
+
+        // 1. إنشاء تذكرة (لأي مستخدم مسجل)
+        [HttpPost("support/create")]
+        [Authorize]
+        public async Task<IActionResult> CreateSupportTicket([FromForm] CreateTicketRequest request)
+        {
+            var result = await _supportTicketService.CreateTicketAsync(User, request);
+            return Ok(new { success = true, data = result, message = "تم إرسال التذكرة بنجاح" });
+        }
+
+        // 2. عرض تذاكري (للمستخدم العادي)
+        [HttpGet("support/my-tickets")]
+        [Authorize]
+        public async Task<IActionResult> GetMyTickets()
+        {
+            var result = await _supportTicketService.GetMyTicketsAsync(User);
+            return Ok(new { success = true, data = result });
+        }
+
+        // 3. عرض كل التذاكر (للموظفين والإدارة فقط)
+        [HttpGet("support/all-tickets")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetAllTickets()
+        {
+            var result = await _supportTicketService.GetAllTicketsForAdminAsync(User);
+            return Ok(new { success = true, data = result });
+        }
+
+        // 4. تحديث حالة التذكرة (للموظفين والإدارة فقط)
+        [HttpPost("support/update-status")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> UpdateTicketStatus([FromBody] UpdateTicketStatusRequest request)
+        {
+            var result = await _supportTicketService.UpdateTicketStatusAsync(User, request);
+            return Ok(new { success = true, data = result, message = "تم تحديث حالة التذكرة بنجاح" });
+        }
+        // حذف تذكرة (Admin + SuperAdmin فقط)
+        [HttpDelete("support/delete/{id}")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> DeleteTicket(int id)
+        {
+            try
+            {
+                await _supportTicketService.DeleteTicketAsync(User, id);
+                return Ok(new { success = true, message = "تم حذف التذكرة بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                // نعيد BadRequest بدلاً من 500 لتوضيح سبب الفشل (مثل عدم وجود صلاحية)
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
 
 
 

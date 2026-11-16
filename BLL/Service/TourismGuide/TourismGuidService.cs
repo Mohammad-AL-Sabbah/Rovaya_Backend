@@ -2,15 +2,17 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
-using Rovaya.DAL.DTO.Request.TourismGuid;
-using Rovaya.DAL.DTO.Response.TourismGuid;
-using Rovaya.DAL.Models.TourismGuide;
-using Rovaya.DAL.Repository.TourismGuid;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.IO;
+using System.Security.Claims; // ✅ ضروري لـ ClaimsPrincipal
+using Rovaya.DAL.DTO.Request.TourismGuid;
+using Rovaya.DAL.DTO.Response.TourismGuid;
+using Rovaya.DAL.Models.TourismGuide;
+using Rovaya.DAL.Repository.TourismGuid;
+using Rovaya.BLL.Service.Audit; // ✅ ضروري لخدمة التدقيق
 
 namespace Rovaya.BLL.Service.TourismGuide
 {
@@ -19,15 +21,18 @@ namespace Rovaya.BLL.Service.TourismGuide
         private readonly ITourismGuidRepository _repository;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IConfiguration _configuration;
+        private readonly IAuditLogService _auditLogService; // ✅ 1. تعريف خدمة التدقيق
 
         public TourismGuidService(
             ITourismGuidRepository repository,
             IWebHostEnvironment webHostEnvironment,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAuditLogService auditLogService) // ✅ 2. حقن الخدمة في الـ Constructor
         {
             _repository = repository;
             _webHostEnvironment = webHostEnvironment;
             _configuration = configuration;
+            _auditLogService = auditLogService;
         }
 
         // ================= Categories =================
@@ -44,7 +49,8 @@ namespace Rovaya.BLL.Service.TourismGuide
             return category == null ? null : MapToCategoryResponse(category, langCode);
         }
 
-        public async Task<TourismGuidResponse> CreateCategoryAsync(TourismGuidRequest request)
+        // ✅ 3. إضافة ClaimsPrincipal user كمعامل أول
+        public async Task<TourismGuidResponse> CreateCategoryAsync(ClaimsPrincipal user, TourismGuidRequest request)
         {
             string? imageUrl = await SaveImageAsync(request.Image);
             var translations = new List<TourismGuideCategoryTranslation>();
@@ -76,11 +82,23 @@ namespace Rovaya.BLL.Service.TourismGuide
             }
 
             var created = await _repository.CreateCategoryAsync(categoryEntity);
+
+            // ✅ 4. تسجيل العملية في الـ Audit Log
+            var categoryName = translations.FirstOrDefault()?.Name ?? "تصنيف جديد";
+            await _auditLogService.LogActionAsync(
+                user: user,
+                action: "CreateCategory",
+                targetUserId: null,
+                targetUserName: $"تصنيف رقم {created.Id}",
+                details: $"تم إنشاء تصنيف جديد في الدليل السياحي: {categoryName}",
+                reason: "إضافة محتوى للدليل السياحي"
+            );
+
             var firstLang = translations.FirstOrDefault()?.LanguageCode ?? "ar";
             return MapToCategoryResponse(created, firstLang);
         }
 
-        public async Task<bool> UpdateCategoryAsync(int id, TourismGuidRequest request)
+        public async Task<bool> UpdateCategoryAsync(ClaimsPrincipal user, int id, TourismGuidRequest request)
         {
             var existingCategory = await _repository.GetCategoryByIdAsync(id, langCode: null);
             if (existingCategory == null) return false;
@@ -115,17 +133,49 @@ namespace Rovaya.BLL.Service.TourismGuide
                     }
                 }
             }
-            return await _repository.UpdateCategoryAsync(existingCategory);
+
+            var result = await _repository.UpdateCategoryAsync(existingCategory);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية التعديل
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "UpdateCategory",
+                    targetUserId: null,
+                    targetUserName: $"تصنيف رقم {id}",
+                    details: $"تم تحديث بيانات التصنيف رقم {id} في الدليل السياحي",
+                    reason: "تعديل محتوى الدليل السياحي"
+                );
+            }
+
+            return result;
         }
 
-        public async Task<bool> DeleteCategoryAsync(int id)
+        public async Task<bool> DeleteCategoryAsync(ClaimsPrincipal user, int id)
         {
             var category = await _repository.GetCategoryByIdAsync(id, langCode: null);
             if (category != null && !string.IsNullOrEmpty(category.ImageUrl))
             {
                 DeleteImageFromFileSystem(category.ImageUrl);
             }
-            return await _repository.DeleteCategoryAsync(id);
+
+            var result = await _repository.DeleteCategoryAsync(id);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية الحذف
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "DeleteCategory",
+                    targetUserId: null,
+                    targetUserName: $"تصنيف رقم {id}",
+                    details: $"تم حذف التصنيف رقم {id} من الدليل السياحي نهائياً",
+                    reason: "حذف محتوى من الدليل السياحي"
+                );
+            }
+
+            return result;
         }
 
         // ================= Places =================
@@ -142,7 +192,7 @@ namespace Rovaya.BLL.Service.TourismGuide
             return place == null ? null : MapToPlaceResponse(place, langCode);
         }
 
-        public async Task<TourismPlaceResponse> CreatePlaceAsync(CreateTourismPlaceRequest request)
+        public async Task<TourismPlaceResponse> CreatePlaceAsync(ClaimsPrincipal user, CreateTourismPlaceRequest request)
         {
             string? imageUrl = await SaveImageAsync(request.Image);
             var translations = new List<TourismGuidePlaceTranslation>();
@@ -183,11 +233,23 @@ namespace Rovaya.BLL.Service.TourismGuide
             }
 
             var created = await _repository.CreatePlaceAsync(placeEntity);
+
+            // ✅ تسجيل عملية الإنشاء
+            var placeName = translations.FirstOrDefault()?.Name ?? "مكان سياحي جديد";
+            await _auditLogService.LogActionAsync(
+                user: user,
+                action: "CreatePlace",
+                targetUserId: null,
+                targetUserName: $"مكان رقم {created.Id}",
+                details: $"تم إضافة مكان سياحي جديد: {placeName}",
+                reason: "إضافة معلم سياحي للدليل"
+            );
+
             var firstLang = translations.FirstOrDefault()?.LanguageCode ?? "ar";
             return MapToPlaceResponse(created, firstLang);
         }
 
-        public async Task<bool> UpdatePlaceAsync(UpdateTourismPlaceRequest request)
+        public async Task<bool> UpdatePlaceAsync(ClaimsPrincipal user, UpdateTourismPlaceRequest request)
         {
             var existingPlace = await _repository.GetPlaceByIdAsync(request.Id, langCode: null);
             if (existingPlace == null) return false;
@@ -236,17 +298,48 @@ namespace Rovaya.BLL.Service.TourismGuide
                 }
             }
 
-            return await _repository.UpdatePlaceAsync(existingPlace);
+            var result = await _repository.UpdatePlaceAsync(existingPlace);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية التعديل
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "UpdatePlace",
+                    targetUserId: null,
+                    targetUserName: $"مكان رقم {request.Id}",
+                    details: $"تم تحديث بيانات المكان السياحي رقم {request.Id}",
+                    reason: "تعديل معلم سياحي"
+                );
+            }
+
+            return result;
         }
 
-        public async Task<bool> DeletePlaceAsync(int id)
+        public async Task<bool> DeletePlaceAsync(ClaimsPrincipal user, int id)
         {
             var place = await _repository.GetPlaceByIdAsync(id, langCode: null);
             if (place != null && !string.IsNullOrEmpty(place.ImageUrl))
             {
                 DeleteImageFromFileSystem(place.ImageUrl);
             }
-            return await _repository.DeletePlaceAsync(id);
+
+            var result = await _repository.DeletePlaceAsync(id);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية الحذف
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "DeletePlace",
+                    targetUserId: null,
+                    targetUserName: $"مكان رقم {id}",
+                    details: $"تم حذف المكان السياحي رقم {id} نهائياً",
+                    reason: "حذف معلم سياحي"
+                );
+            }
+
+            return result;
         }
 
         // ================= City Sections =================
@@ -263,12 +356,11 @@ namespace Rovaya.BLL.Service.TourismGuide
             return section == null ? null : MapSectionToResponse(section);
         }
 
-        public async Task<CitySectionResponse> CreateSectionAsync(CreateCitySectionRequest request)
+        public async Task<CitySectionResponse> CreateSectionAsync(ClaimsPrincipal user, CreateCitySectionRequest request)
         {
             var images = new List<string>(request.ExistingImages ?? new List<string>());
             var videos = new List<string>(request.ExistingVideos ?? new List<string>());
 
-            // ✅ رفع الصور الجديدة (متعددة)
             if (request.ImageFiles != null)
             {
                 foreach (var file in request.ImageFiles)
@@ -278,7 +370,6 @@ namespace Rovaya.BLL.Service.TourismGuide
                 }
             }
 
-            // ✅ رفع الفيديوهات الجديدة (متعددة)
             if (request.VideoFiles != null)
             {
                 foreach (var file in request.VideoFiles)
@@ -299,11 +390,23 @@ namespace Rovaya.BLL.Service.TourismGuide
                 ImagesJson = images.Count > 0 ? JsonSerializer.Serialize(images) : null,
                 VideosJson = videos.Count > 0 ? JsonSerializer.Serialize(videos) : null
             };
+
             var created = await _repository.CreateSectionAsync(section);
+
+            // ✅ تسجيل عملية الإنشاء
+            await _auditLogService.LogActionAsync(
+                user: user,
+                action: "CreateCitySection",
+                targetUserId: null,
+                targetUserName: $"قسم مدينة (CityId: {request.CityId})",
+                details: $"تم إضافة قسم جديد للمدينة: {request.Title}",
+                reason: "إضافة محتوى تفصيلي لمدينة"
+            );
+
             return MapSectionToResponse(created);
         }
 
-        public async Task<bool> UpdateSectionAsync(UpdateCitySectionRequest request)
+        public async Task<bool> UpdateSectionAsync(ClaimsPrincipal user, UpdateCitySectionRequest request)
         {
             var existing = await _repository.GetSectionByIdAsync(request.Id);
             if (existing == null) return false;
@@ -311,7 +414,6 @@ namespace Rovaya.BLL.Service.TourismGuide
             var images = new List<string>(request.ExistingImages ?? new List<string>());
             var videos = new List<string>(request.ExistingVideos ?? new List<string>());
 
-            // ✅ رفع الصور الجديدة (متعددة)
             if (request.ImageFiles != null)
             {
                 foreach (var file in request.ImageFiles)
@@ -321,7 +423,6 @@ namespace Rovaya.BLL.Service.TourismGuide
                 }
             }
 
-            // ✅ رفع الفيديوهات الجديدة (متعددة)
             if (request.VideoFiles != null)
             {
                 foreach (var file in request.VideoFiles)
@@ -339,13 +440,42 @@ namespace Rovaya.BLL.Service.TourismGuide
             existing.ImagesJson = images.Count > 0 ? JsonSerializer.Serialize(images) : null;
             existing.VideosJson = videos.Count > 0 ? JsonSerializer.Serialize(videos) : null;
 
-            await _repository.UpdateSectionAsync(existing);
-            return true;
+            var result = await _repository.UpdateSectionAsync(existing);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية التعديل
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "UpdateCitySection",
+                    targetUserId: null,
+                    targetUserName: $"قسم مدينة رقم {request.Id}",
+                    details: $"تم تحديث بيانات قسم المدينة رقم {request.Id}",
+                    reason: "تعديل محتوى تفصيلي لمدينة"
+                );
+            }
+
+            return result;
         }
 
-        public async Task<bool> DeleteSectionAsync(int id)
+        public async Task<bool> DeleteSectionAsync(ClaimsPrincipal user, int id)
         {
-            return await _repository.DeleteSectionAsync(id);
+            var result = await _repository.DeleteSectionAsync(id);
+
+            if (result)
+            {
+                // ✅ تسجيل عملية الحذف
+                await _auditLogService.LogActionAsync(
+                    user: user,
+                    action: "DeleteCitySection",
+                    targetUserId: null,
+                    targetUserName: $"قسم مدينة رقم {id}",
+                    details: $"تم حذف قسم المدينة رقم {id} نهائياً",
+                    reason: "حذف محتوى تفصيلي لمدينة"
+                );
+            }
+
+            return result;
         }
 
         // ================= Cities =================
@@ -406,7 +536,6 @@ namespace Rovaya.BLL.Service.TourismGuide
             return $"/uploads/tourism/{uniqueFileName}";
         }
 
-        // دالة حفظ الفيديو
         private async Task<string?> SaveVideoAsync(IFormFile? file)
         {
             if (file == null || file.Length == 0) return null;
@@ -512,7 +641,6 @@ namespace Rovaya.BLL.Service.TourismGuide
                 ? new List<string>()
                 : JsonSerializer.Deserialize<List<string>>(section.VideosJson) ?? new List<string>();
 
-            // ✅ تحويل مسارات الصور والفيديو إلى روابط كاملة
             var fullImageUrls = images.Select(img => GetFullImageUrl(img)).ToList();
             var fullVideoUrls = videos.Select(vid => GetFullImageUrl(vid)).ToList();
 
@@ -525,8 +653,8 @@ namespace Rovaya.BLL.Service.TourismGuide
                 Content = section.Content,
                 ContentEn = section.ContentEn,
                 Order = section.Order,
-                Images = fullImageUrls,  // ✅ روابط كاملة
-                Videos = fullVideoUrls,  // ✅ روابط كاملة
+                Images = fullImageUrls,
+                Videos = fullVideoUrls,
                 CreatedAt = section.CreatedAt
             };
         }
