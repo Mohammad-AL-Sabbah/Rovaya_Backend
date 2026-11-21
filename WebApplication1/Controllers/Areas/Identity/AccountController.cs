@@ -4,12 +4,16 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Rovaya.BLL.Service.Audit;
 using Rovaya.BLL.Service.Auth;
+using Rovaya.BLL.Service.Business; // ✅ جديد
 using Rovaya.BLL.Service.Profile;
 using Rovaya.BLL.Service.SupportTickets;
 using Rovaya.DAL.DTO.Request.Auth;
+using Rovaya.DAL.DTO.Request.Business; // ✅ جديد
 using Rovaya.DAL.DTO.Request.Profile;
 using Rovaya.DAL.DTO.Request.Support;
 using Rovaya.DAL.DTO.Response.Auth;
+using Rovaya.DAL.Enums;
+using Rovaya.DAL.Models.Auth;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 
@@ -23,31 +27,38 @@ namespace Rovaya.PL.Controllers.Areas.Identity
         private readonly IProfileService _profileService;
         private readonly IAuditLogService _auditLogService;
         private readonly ISupportTicketService _supportTicketService;
+        private readonly IUserVerificationService _verificationService; // ✅
+        private readonly IBusinessPlaceService _businessPlaceService;   // ✅
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public AccountController(IAuthenticationService authenticationService,IProfileService  profileService,IAuditLogService  auditLogService
-            ,ISupportTicketService supportTicketService
-            )
+        public AccountController(
+            IAuthenticationService authenticationService,
+            IProfileService profileService,
+            IAuditLogService auditLogService,
+            ISupportTicketService supportTicketService,
+            IUserVerificationService verificationService,   // ✅
+            IBusinessPlaceService businessPlaceService,
+            UserManager<ApplicationUser> userManager
+
+
+            )     // ✅
         {
             _authenticationService = authenticationService;
             _profileService = profileService;
             _auditLogService = auditLogService;
             _supportTicketService = supportTicketService;
+            _verificationService = verificationService;     // ✅
+            _businessPlaceService = businessPlaceService;   // ✅
+            _userManager = userManager;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterRequest request)
         {
             var result = await _authenticationService.RegisterAsync(request);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
-
-
-    
 
         [HttpGet("ConfirmEmail")]
         public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
@@ -81,7 +92,6 @@ namespace Rovaya.PL.Controllers.Areas.Identity
                     </div>
                 </body>
                 </html>";
-
                 return Content(successHtml, "text/html");
             }
 
@@ -108,92 +118,58 @@ namespace Rovaya.PL.Controllers.Areas.Identity
                 </div>
             </body>
             </html>";
-
             return Content(errorHtml, "text/html");
         }
-
 
         [HttpPost("SendCode")]
         public async Task<IActionResult> RequestPasswordReset(ForgetPasswordRequest request)
         {
             var result = await _authenticationService.RequestPasswordReset(request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
-         }
+        }
 
         [HttpPatch("ResetPassword")]
-
         public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
         {
             var result = await _authenticationService.ResetPassword(request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
-
-
-
-
-
 
         [HttpPost("ResendConfirmationEmail")]
-        [EnableRateLimiting("StrictEmailPolicy")] // تطبيق حد الطلبات لحماية السيرفر
+        [EnableRateLimiting("StrictEmailPolicy")]
         public async Task<IActionResult> ResendConfirmationEmail([FromBody] ResendEmailRequest request)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
+            if (!ModelState.IsValid) return BadRequest(ModelState);
             var result = await _authenticationService.ResendConfirmationEmailAsync(request.Email);
-
-            if (!result.Success)
-                return BadRequest(result);
-
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
-
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginRequest request)
         {
             var result = await _authenticationService.LoginAsync(request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
-
         }
-
-
 
         [HttpPost("change-password")]
         [Authorize]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var result = await _authenticationService.ChangePasswordAsync(User, request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
-
-
 
         [HttpDelete("delete-account")]
         [Authorize]
         public async Task<IActionResult> DeleteAccount([FromBody] DeleteAccountRequest request)
         {
             var result = await _authenticationService.DeleteAccountAsync(User, request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
@@ -201,12 +177,11 @@ namespace Rovaya.PL.Controllers.Areas.Identity
         [Authorize(Roles = "SuperAdmin")]
         public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeRequest request)
         {
-            var result = await _authenticationService.CreateEmployeeAsync(User, request); // لاحظ إضافة User هنا
+            var result = await _authenticationService.CreateEmployeeAsync(User, request);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
-         
         [HttpPost("block-user")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> BlockUser([FromBody] BlockUserRequest request)
@@ -225,9 +200,7 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(result);
         }
 
-
-
-        // ==================== Profile Management (Protected) ====================
+        // ==================== Profile Management ====================
 
         [HttpGet("profile")]
         [Authorize]
@@ -336,9 +309,6 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(result);
         }
 
-
-
-
         [HttpGet("audit-logs")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> GetAuditLogs([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 50)
@@ -348,59 +318,35 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(result);
         }
 
-
-
         [HttpPost("delete-user-account")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> DeleteUserAccount([FromBody] string targetUserId)
         {
             var result = await _authenticationService.DeleteUserAccountByAdminAsync(User, targetUserId);
-
-            if (!result.Success)
-                return BadRequest(result);
-
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
-
-
-
-
-
-
-
-
-
-
-        // ... (أبقِ على جميع الـ Using والـ Constructor كما هي) ...
 
         [HttpPost("upload-profile-image")]
         [Authorize]
         public async Task<IActionResult> UploadProfileImage([FromForm] IFormFile file)
         {
             var result = await _profileService.UploadProfileImageAsync(User, file);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
-
-
         [HttpPost("change-role")]
-        [Authorize(Roles = "SuperAdmin")] 
+        [Authorize(Roles = "SuperAdmin")]
         public async Task<IActionResult> ChangeUserRole([FromBody] ChangeRoleRequest request)
         {
             var result = await _authenticationService.ChangeUserRoleAsync(User, request);
-            if (!result.Success)
-                return BadRequest(result);
-
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
+        // ==================== Support Tickets ====================
 
-
-        // 1. إنشاء تذكرة (لأي مستخدم مسجل)
         [HttpPost("support/create")]
         [Authorize]
         public async Task<IActionResult> CreateSupportTicket([FromForm] CreateTicketRequest request)
@@ -409,7 +355,6 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(new { success = true, data = result, message = "تم إرسال التذكرة بنجاح" });
         }
 
-        // 2. عرض تذاكري (للمستخدم العادي)
         [HttpGet("support/my-tickets")]
         [Authorize]
         public async Task<IActionResult> GetMyTickets()
@@ -418,7 +363,6 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(new { success = true, data = result });
         }
 
-        // 3. عرض كل التذاكر (للموظفين والإدارة فقط)
         [HttpGet("support/all-tickets")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> GetAllTickets()
@@ -427,7 +371,6 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             return Ok(new { success = true, data = result });
         }
 
-        // 4. تحديث حالة التذكرة (للموظفين والإدارة فقط)
         [HttpPost("support/update-status")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> UpdateTicketStatus([FromBody] UpdateTicketStatusRequest request)
@@ -435,7 +378,7 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             var result = await _supportTicketService.UpdateTicketStatusAsync(User, request);
             return Ok(new { success = true, data = result, message = "تم تحديث حالة التذكرة بنجاح" });
         }
-        // حذف تذكرة (Admin + SuperAdmin فقط)
+
         [HttpDelete("support/delete/{id}")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> DeleteTicket(int id)
@@ -447,15 +390,258 @@ namespace Rovaya.PL.Controllers.Areas.Identity
             }
             catch (Exception ex)
             {
-                // نعيد BadRequest بدلاً من 500 لتوضيح سبب الفشل (مثل عدم وجود صلاحية)
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
 
+        // ==================== ✅ Business Verification (طلب التوثيق) ====================
+
+        /// <summary>
+        /// المستخدم يرسل طلب توثيق حسابه كصاحب عمل
+        /// </summary>
+        [HttpPost("business-verification/submit")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> SubmitVerificationRequest([FromBody] SubmitVerificationRequestDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "بيانات غير صالحة", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+
+                var result = await _verificationService.SubmitRequestAsync(User, dto);
+                return Ok(new
+                {
+                    success = true,
+                    message = "تم إرسال طلب التوثيق بنجاح. سيتم مراجعته من الإدارة.",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// المستخدم يجلب حالة حسابه (Verified / Pending / Rejected / NotVerified)
+        /// ✅ هذه النقطة تُستخدم في الموبايل لإظهار أو إخفاء فورم إضافة الأماكن
+        /// </summary>
+        [HttpGet("business-verification/my-status")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> GetMyVerificationStatus()
+        {
+            try
+            {
+                var result = await _verificationService.GetMyStatusAsync(User);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// الإدارة تجلب كل طلبات التوثيق المعلقة
+        /// </summary>
+        [HttpGet("business-verification/admin/pending")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetPendingVerificationRequests()
+        {
+            try
+            {
+                var result = await _verificationService.GetAllPendingForAdminAsync(User);
+                return Ok(new { success = true, data = result, totalCount = result.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// الإدارة تراجع طلب توثيق (موافقة / رفض + سبب)
+        /// ✅ عند الموافقة: الحساب يتحول لـ Verified تلقائياً
+        /// </summary>
+        [HttpPost("business-verification/admin/review/{id}")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> ReviewVerificationRequest(int id, [FromBody] ReviewVerificationRequestDto dto)
+        {
+            try
+            {
+                var success = await _verificationService.ReviewRequestAsync(User, id, dto);
+                if (!success) return NotFound(new { success = false, message = "الطلب غير موجود" });
+
+                var msg = dto.Approve
+                    ? "تم توثيق الحساب. المستخدم يستطيع الآن إضافة أماكن على الخريطة."
+                    : "تم رفض الطلب وإشعار المستخدم بالسبب.";
+
+                return Ok(new { success = true, message = msg });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        // ==================== ✅ Business Places (الأماكن على الخريطة) ====================
+
+        /// <summary>
+        /// إضافة مكان تجاري — مسموح فقط للحسابات Verified
+        /// </summary>
+        [HttpPost("business-places")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> CreateBusinessPlace([FromForm] CreateBusinessPlaceDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { success = false, message = "بيانات غير صالحة" });
+
+                var result = await _businessPlaceService.CreateAsync(User, dto);
+                return Ok(new { success = true, message = "تمت إضافة المكان بنجاح على الخريطة", data = result });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// المستخدم يجلب أماكنه
+        /// </summary>
+        [HttpGet("business-places/my")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> GetMyBusinessPlaces()
+        {
+            var result = await _businessPlaceService.GetMyPlacesAsync(User);
+            return Ok(new { success = true, data = result, totalCount = result.Count });
+        }
+
+        /// <summary>
+        /// جلب كل الأماكن النشطة لعرضها على الخريطة (للموبايل والويب)
+        /// </summary>
+        [HttpGet("business-places/public")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAllActiveBusinessPlaces()
+        {
+            var result = await _businessPlaceService.GetAllActiveAsync();
+            return Ok(new { success = true, data = result, totalCount = result.Count });
+        }
+
+        /// <summary>
+        /// تعديل مكان — مسموح فقط لصاحبه الموثّق
+        /// </summary>
+        [HttpPut("business-places")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> UpdateBusinessPlace([FromForm] UpdateBusinessPlaceDto dto)
+        {
+            try
+            {
+                var result = await _businessPlaceService.UpdateAsync(User, dto);
+                return Ok(new { success = true, message = "تم تحديث المكان", data = result });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// حذف مكان — مسموح فقط لصاحبه الموثّق
+        /// </summary>
+        [HttpDelete("business-places/{id}")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> DeleteBusinessPlace(int id)
+        {
+            try
+            {
+                var success = await _businessPlaceService.DeleteAsync(User, id);
+                if (!success) return NotFound(new { success = false, message = "المكان غير موجود" });
+                return Ok(new { success = true, message = "تم حذف المكان" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+      
+        [HttpGet("business-verification/admin/all")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> GetAllVerificationRequests([FromQuery] string? status = null)
+        {
+            try
+            {
+                // 1. تحويل نص الحالة القادم من الـ Query إلى Enum (اختياري)
+                VerificationRequestStatus? statusFilter = null;
+
+                if (!string.IsNullOrWhiteSpace(status) && status.ToLower() != "all")
+                {
+                    if (Enum.TryParse<VerificationRequestStatus>(status, true, out var parsed))
+                    {
+                        statusFilter = parsed;
+                    }
+                    else
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "حالة غير صالحة. القيم المسموحة: Pending, Approved, Rejected, أو all"
+                        });
+                    }
+                }
+
+                // 2. استدعاء الخدمة لجلب البيانات مع الفلتر
+                var result = await _verificationService.GetAllRequestsForAdminAsync(User, statusFilter);
+
+                // 3. إرجاع الاستجابة بتنسيق موحد
+                return Ok(new
+                {
+                    success = true,
+                    data = result,
+                    totalCount = result.Count,
+                    filter = statusFilter?.ToString() ?? "all"
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = $"حدث خطأ في الخادم: {ex.Message}" });
+            }
+        }
 
 
+        [HttpPost("users/{userId}/revoke-verification")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> RevokeVerification(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound(new { success = false, message = "المستخدم غير موجود" });
 
+            if (user.VerificationStatus != UserVerificationStatus.Verified)
+            {
+                return BadRequest(new { success = false, message = "هذا الحساب ليس موثقاً أصلاً" });
+            }
 
+            // ✅ إلغاء التوثيق
+            user.VerificationStatus = UserVerificationStatus.NotVerified;
+            user.VerifiedAt = null;
+            user.VerifiedByAdminId = null;
+            user.VerificationNotes = "تم إلغاء التوثيق من قبل الإدارة";
+
+            await _userManager.UpdateAsync(user);
+
+            // تسجيل في الـ Audit
+            await _auditLogService.LogActionAsync(
+                user: User,
+                action: "RevokeUserVerification",
+                targetUserId: user.Id,
+                targetUserName: $"{user.FirstName} {user.LastName}",
+                details: $"تم إلغاء توثيق الحساب كصاحب عمل",
+                reason: "إجراء إداري"
+            );
+
+            return Ok(new { success = true, message = "تم إلغاء توثيق الحساب بنجاح" });
+        }
 
     }
-    }
+}

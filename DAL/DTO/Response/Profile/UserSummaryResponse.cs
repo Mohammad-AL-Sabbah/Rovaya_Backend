@@ -14,5 +14,7 @@ namespace Rovaya.DAL.DTO.Response.Profile
         public DateTime CreatedAt { get; set; }
         public AccountStatus Status { get; set; }
         public List<string> Roles { get; set; } = new();
+        public UserVerificationStatus VerificationStatus { get; set; }
+
     }
 }

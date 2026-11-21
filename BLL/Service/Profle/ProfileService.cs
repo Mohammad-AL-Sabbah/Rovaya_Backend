@@ -418,7 +418,8 @@ namespace Rovaya.BLL.Service.Profile
                         Country = user.Country,
                         CreatedAt = user.CreatedAt,
                         Status = user.Status,
-                        Roles = userRoles.ToList()
+                        Roles = userRoles.ToList(),
+                        VerificationStatus = user.VerificationStatus
                     });
                 }
 

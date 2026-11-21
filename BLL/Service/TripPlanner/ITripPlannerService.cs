@@ -15,4 +15,5 @@ public interface ITripPlannerService
     Task<bool> ActivateTripAsync(string userId, int tripId);
     Task<bool> ArchiveTripAsync(string userId, int tripId);
     Task<bool> DeleteTripAsync(string userId, int tripId);
+    Task<UpdateTripResult> UpdateTripAsync(string userId, int tripId, UpdateTripRequest request);
 }

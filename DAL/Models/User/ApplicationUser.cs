@@ -44,5 +44,12 @@ namespace Rovaya.DAL.Models.Auth
 
 
 
+        // ✅ ✅ ✅ الحقول الجديدة لتوثيق صاحب العمل
+        public UserVerificationStatus VerificationStatus { get; set; } = UserVerificationStatus.NotVerified;
+        public string? VerificationNotes { get; set; }          // سبب الرفض أو ملاحظة الموافقة
+        public DateTime? VerifiedAt { get; set; }
+        public string? VerifiedByAdminId { get; set; }
+
+
     }
 }

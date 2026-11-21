@@ -284,5 +284,16 @@ namespace Rovaya.PL.Controllers.Areas.Customer
 
             return Ok(new { success = true, message = "تم حذف الخطة بنجاح" });
         }
+
+        [HttpPut("update-trip/{tripId:int}")]
+        public async Task<IActionResult> UpdateTrip(int tripId, [FromBody] UpdateTripRequest request)
+        {
+            var result = await _tripPlannerService.UpdateTripAsync(GetUserId(), tripId, request);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, new { success = false, message = result.Message });
+
+            return Ok(new { success = true, message = result.Message, trip_id = tripId, plan = result.Plan });
+        }
+
     }
 }

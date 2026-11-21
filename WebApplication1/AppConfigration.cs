@@ -1,13 +1,17 @@
 ﻿using Microsoft.AspNetCore.Identity.UI.Services;
+using Rovaya.BLL.Service;
 using Rovaya.BLL.Service.Audit;
 using Rovaya.BLL.Service.Auth;
+using Rovaya.BLL.Service.Business;
 using Rovaya.BLL.Service.Email;
 using Rovaya.BLL.Service.External;
 using Rovaya.BLL.Service.Profile;
 using Rovaya.BLL.Service.Recommendations;
 using Rovaya.BLL.Service.SupportTickets;
 using Rovaya.BLL.Service.TourismGuide;
+using Rovaya.DAL.Repository;
 using Rovaya.DAL.Repository.Audit;
+using Rovaya.DAL.Repository.Business;
 using Rovaya.DAL.Repository.Profile;
 using Rovaya.DAL.Repository.Recommendations;
 using Rovaya.DAL.Repository.Support;
@@ -74,6 +78,14 @@ namespace Rovaya.PL
 
             // BLL Service
            Services.AddScoped<ISupportTicketService, SupportTicketService>();
+
+     
+
+
+            Services.AddScoped<IVerificationRequestRepository, VerificationRequestRepository>();
+            Services.AddScoped<IBusinessPlaceRepository, BusinessPlaceRepository>();
+            Services.AddScoped<IUserVerificationService, UserVerificationService>();
+            Services.AddScoped<IBusinessPlaceService, BusinessPlaceService>();
 
 
         }

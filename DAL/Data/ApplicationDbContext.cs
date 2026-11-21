@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Rovaya.DAL.Models;
 using Rovaya.DAL.Models.Auth;
+using Rovaya.DAL.Models.Business;
 using Rovaya.DAL.Models.Identity;
 using Rovaya.DAL.Models.Support;
 using Rovaya.DAL.Models.TourismGuide;
@@ -19,6 +21,9 @@ namespace Rovaya.DAL.Data
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<UserTrip> UserTrips { get; set; }
         public DbSet<Rovaya.DAL.Models.Recommendations.RovayaRecommendation> RovayaRecommendations { get; set; }
+
+        public DbSet<VerificationRequest> VerificationRequests { get; set; }
+        public DbSet<BusinessPlace> BusinessPlaces { get; set; }
 
 
         public DbSet<CitySection> CitySections { get; set; }
